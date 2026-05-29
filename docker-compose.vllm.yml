@@ -1,0 +1,67 @@
+# WebPilot — compose with local vLLM (requires NVIDIA GPU, NVIDIA Container Toolkit)
+#
+# Recommended GPU: RTX 3080 Ti (16 GB VRAM)
+# Default model:   mistralai/Mistral-7B-Instruct-v0.3 (~14 GB at bfloat16)
+#
+# Alternative lightweight models (fit in 16 GB):
+#   Qwen/Qwen2.5-7B-Instruct
+#   meta-llama/Llama-3.1-8B-Instruct  (needs HF token)
+#
+# Usage:
+#   cp server/.env.example server/.env  # fill in HUGGING_FACE_HUB_TOKEN if needed
+#   docker compose -f docker-compose.vllm.yml up -d
+
+services:
+  webpilot-server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./server/.env
+    environment:
+      VLLM_BASE_URL: http://vllm:8000/v1
+    depends_on:
+      vllm:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  vllm:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "8080:8000"      # host:container — access the vLLM API directly on :8080
+    volumes:
+      - huggingface-cache:/root/.cache/huggingface
+    command: >
+      --model mistralai/Mistral-7B-Instruct-v0.3
+      --dtype bfloat16
+      --max-model-len 4096
+      --gpu-memory-utilization 0.85
+      --served-model-name webpilot-model
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 180s   # model download + load can take a few minutes
+
+volumes:
+  huggingface-cache:
+    driver: local

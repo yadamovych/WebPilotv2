@@ -1,0 +1,160 @@
+/*
+ * sidepanel.css — overrides for the Chrome Side Panel (right-side panel).
+ * Layered on top of popup.css.
+ * The side panel is always ~400 px wide and fills the full viewport height.
+ */
+
+/* ── Layout: fill full height ───────────────────────────────────────────── */
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body { width: 100%; }
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Header: taller, with subtitle ─────────────────────────────────────── */
+header {
+  flex-shrink: 0;
+  padding: 14px 18px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.header-sub {
+  font-size: 11.5px;
+  color: rgba(255,255,255,.65);
+  margin-left: 40px;          /* aligns under logo text */
+}
+
+/* ── Tabs ───────────────────────────────────────────────────────────────── */
+.tabs { flex-shrink: 0; }
+
+/* ── Tab panels: take remaining height, scroll internally ───────────────── */
+.tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 18px 24px;
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+/* ── Record: more breathing room ────────────────────────────────────────── */
+.record-hero {
+  padding: 22px 0 18px;
+}
+
+.steps-list {
+  max-height: none;          /* no cap — panel scrolls */
+}
+
+/* ── Workflows tab: Copilot-style prompt bar at the very top ────────────── */
+.sp-prompt-hero {
+  background: white;
+  border: 1.5px solid rgba(0,103,184,.18);
+  border-radius: 14px;
+  padding: 14px 14px 10px;
+  margin-bottom: 18px;
+  box-shadow: 0 4px 24px rgba(0,103,184,.1);
+}
+
+.sp-prompt-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #201f1e;
+  margin-bottom: 10px;
+}
+.sp-prompt-label svg { color: #0067b8; flex-shrink: 0; }
+
+.sp-prompt-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.sp-prompt-input-row textarea {
+  flex: 1;
+  resize: none;
+  min-height: 54px;
+  border: 1.5px solid #edebe9;
+  border-radius: 10px;
+  background: #f8f7f6;
+  font-size: 13px;
+  padding: 9px 12px;
+  line-height: 1.5;
+  color: #201f1e;
+  transition: border-color .18s, box-shadow .18s;
+}
+.sp-prompt-input-row textarea:focus {
+  border-color: #0067b8;
+  box-shadow: 0 0 0 3px rgba(0,103,184,.12);
+  background: #fff;
+  outline: none;
+}
+.sp-prompt-input-row textarea::placeholder { color: #8a8886; }
+
+.sp-run-btn {
+  width: 38px; height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #0067b8 0%, #8661c5 100%);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0,103,184,.35);
+  transition: box-shadow .18s, transform .18s, opacity .18s;
+  padding-left: 2px;        /* optical center for play icon */
+}
+.sp-run-btn:hover:not(:disabled) {
+  box-shadow: 0 5px 16px rgba(0,103,184,.45);
+  transform: translateY(-1px);
+}
+.sp-run-btn:disabled {
+  background: #edebe9;
+  color: #8a8886;
+  box-shadow: none;
+  cursor: default;
+}
+
+/* ── Section label ──────────────────────────────────────────────────────── */
+.sp-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #8a8886;
+  margin: 0 0 10px;
+}
+
+/* ── Workflow cards: fill full width, slightly taller ───────────────────── */
+.template-item {
+  padding: 14px 16px;
+}
+
+.template-name { font-size: 14px; }
+.template-meta { font-size: 12px; }
+
+/* ── Chat textarea in play panel: taller ─────────────────────────────────── */
+.chat-input-wrap textarea {
+  min-height: 70px;
+}
+
+/* ── Settings: more generous ────────────────────────────────────────────── */
+.form-group { margin-bottom: 18px; }
+
+input, select, textarea {
+  padding: 9px 12px;
+}

@@ -1,0 +1,18 @@
+# Cloud AI provider SDKs
+openai>=1.35.0
+groq>=0.9.0
+anthropic>=0.30.0
+
+# Web framework
+fastapi>=0.111.0
+uvicorn[standard]==0.22.0
+
+# Config & validation
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+# HTTP (used by openai/groq/anthropic under the hood)
+httpx>=0.27.0
+
+# WebSocket support for uvicorn
+websockets>=12.0
