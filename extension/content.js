@@ -38,7 +38,7 @@
         break;
 
       case 'EXECUTE_STEP':
-        executeStep(message.step, message.index, message.total)
+        executeStep(message.step, message.index, message.total, message.devMode)
           .then((result) => sendResponse({ success: true, result }))
           .catch((err) => sendResponse({ error: err.message }));
         return true; // async
@@ -201,6 +201,7 @@
     handlers.mouseout = onMouseOut;
     handlers.input = onInput;
     handlers.change = onChange;
+    handlers.keydown = onKeyDown;
 
     // Use bubble phase (false) so we observe without blocking any page interaction
     document.addEventListener('click',     handlers.click,     false);
@@ -208,6 +209,7 @@
     document.addEventListener('mouseout',  handlers.mouseout,  false);
     document.addEventListener('input',     handlers.input,     false);
     document.addEventListener('change',    handlers.change,    false);
+    document.addEventListener('keydown',   handlers.keydown,   false);
   }
 
   function detachListeners() {
@@ -216,10 +218,55 @@
     document.removeEventListener('mouseout',  handlers.mouseout,  false);
     document.removeEventListener('input',     handlers.input,     false);
     document.removeEventListener('change',    handlers.change,    false);
+    document.removeEventListener('keydown',   handlers.keydown,   false);
   }
 
   function isWebPilotEl(el) {
     return el === overlayRoot || overlayRoot?.contains(el);
+  }
+
+  /**
+   * Special / functional keys we want to record.
+   * Regular printable characters are handled by onInput; we only capture
+   * navigation / action keys that have meaningful side-effects.
+   */
+  const RECORD_KEYS = new Set([
+    'Enter', 'Escape', 'Tab',
+    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+    'Home', 'End', 'PageUp', 'PageDown',
+    'Delete', 'Backspace',
+    'F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12',
+  ]);
+
+  function onKeyDown(e) {
+    if (!isRecording || isWebPilotEl(e.target)) return;
+    if (!RECORD_KEYS.has(e.key)) return;
+
+    const el = e.target;
+    const selector = buildSelector(el);
+    const label = getLabel(el) || labelFromSelector(selector);
+
+    // Build a human-readable modifier string, e.g. "Ctrl+Shift+Enter"
+    const modifiers = [
+      e.ctrlKey  ? 'Ctrl'  : '',
+      e.metaKey  ? 'Meta'  : '',
+      e.altKey   ? 'Alt'   : '',
+      e.shiftKey ? 'Shift' : '',
+    ].filter(Boolean);
+    const keyCombo = [...modifiers, e.key].join('+');
+
+    const desc = label ? `Press ${keyCombo} in "${label}"` : `Press ${keyCombo}`;
+    chrome.runtime.sendMessage({
+      type: 'RECORD_ACTION',
+      action: {
+        action: 'keypress',
+        selector,
+        value: keyCombo,
+        label,
+        description: desc,
+        elementHint: elementHint(el),
+      },
+    });
   }
 
   /**
@@ -536,44 +583,50 @@
   }
 
   function getLabel(el) {
-    // Prefer explicit accessible names first
+    // 1. Explicit accessible name on the element itself
     const ariaLabel = el.getAttribute('aria-label')?.trim();
     if (ariaLabel) return ariaLabel;
 
-    // aria-labelledby
+    // 2. aria-labelledby
     const labelledBy = el.getAttribute('aria-labelledby');
     if (labelledBy) {
-      const text = labelledBy.split(/\s+/).map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean).join(' ');
+      const text = labelledBy.split(/\s+/)
+        .map(id => document.getElementById(id)?.textContent?.trim())
+        .filter(Boolean).join(' ');
       if (text) return text;
     }
 
-    // Associated <label> element
+    // 3. Associated <label for="id">
     if (el.id) {
       const label = document.querySelector(`label[for="${el.id}"]`);
-      if (label) return label.textContent.trim().slice(0, 60);
+      if (label) return label.textContent.trim().replace(/\s+/g, ' ').slice(0, 60);
     }
 
-    // Parent <label> wrapping this element
+    // 4. Wrapping <label>
     const parentLabel = el.closest('label');
     if (parentLabel) {
       const text = parentLabel.textContent?.trim().replace(/\s+/g, ' ').slice(0, 60);
       if (text) return text;
     }
 
-    const title = el.getAttribute('title')?.trim();
+    // 5. Standard HTML attributes
+    const title       = el.getAttribute('title')?.trim();
     if (title) return title;
-
     const placeholder = el.getAttribute('placeholder')?.trim();
     if (placeholder) return placeholder;
-
-    const name = el.getAttribute('name')?.trim();
+    const name        = el.getAttribute('name')?.trim();
     if (name) return name;
 
-    // Button / link / element text content
-    const text = el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 60);
-    if (text && text.length > 0) return text;
+    // 6. Element's own visible text (buttons, links, etc.)
+    const ownText = el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 60);
+    if (ownText) return ownText;
 
-    // value attribute (e.g. submit buttons)
+    // 7. Walk up the DOM tree looking for a nearby human-readable label.
+    //    Stops at BODY / our overlay root / after 6 levels.
+    const nearbyLabel = _findNearbyLabel(el);
+    if (nearbyLabel) return nearbyLabel;
+
+    // 8. value attribute (submit buttons)
     const val = el.getAttribute('value')?.trim();
     if (val) return val;
 
@@ -581,24 +634,161 @@
   }
 
   /**
-   * Extract a label from an already-built CSS selector string.
-   * E.g. `[aria-label="Search inventory"]` → "Search inventory"
-   * Used as a last-resort fallback when getLabel() returns empty.
+   * Look for visible label text near `el` by walking up the DOM.
+   * At each ancestor level check:
+   *   - an immediately preceding sibling with text
+   *   - a child element whose role/tag suggests it is a label
+   *   - the ancestor's own aria-label / title
+   */
+  function _findNearbyLabel(el) {
+    const OUR_IDS = new Set(['webpilot-overlay', 'webpilot-progress', 'webpilot-dev-hl']);
+
+    let node = el.parentElement;
+    for (let depth = 0; depth < 8 && node && node !== document.body; depth++, node = node.parentElement) {
+      if (OUR_IDS.has(node.id)) break;
+
+      // Ancestor's own aria-label / title
+      const al = node.getAttribute('aria-label')?.trim();
+      if (al) return al;
+      const ti = node.getAttribute('title')?.trim();
+      if (ti) return ti;
+
+      // Preceding siblings with short visible text (labels, headings, <p>, <span>)
+      let sib = node.previousElementSibling;
+      for (let s = 0; s < 3 && sib; s++, sib = sib.previousElementSibling) {
+        const t = sib.textContent?.trim().replace(/\s+/g, ' ');
+        if (t && t.length > 1 && t.length < 80) return t.slice(0, 60);
+      }
+
+      // Children of this ancestor that look like labels
+      for (const child of node.querySelectorAll('label, [class*="label"], [class*="title"], legend, h1, h2, h3, h4, h5, h6, p')) {
+        if (child === el || child.contains(el)) continue;
+        const t = child.textContent?.trim().replace(/\s+/g, ' ');
+        if (t && t.length > 1 && t.length < 80) return t.slice(0, 60);
+      }
+    }
+    return '';
+  }
+
+  /**
+   * Extract a human-readable label from a CSS selector string.
+   * Priority: aria-label attr > #id > last meaningful tag/class segment > raw selector (truncated).
    */
   function labelFromSelector(selector) {
-    // Try aria-label attribute in the selector
-    const m = selector.match(/\[aria-label=["']?([^"'\]]+)["']?\]/);
-    if (m) return m[1].replace(/\\/g, '').trim();
-    // Try #id
-    const id = selector.match(/#([\w-]+)/);
-    if (id) return id[1].replace(/-/g, ' ');
-    return selector;
+    // aria-label attribute in the selector string
+    const ariaM = selector.match(/\[aria-label=["']?([^"'\]]+)["']?\]/);
+    if (ariaM) return ariaM[1].replace(/\\/g, '').trim();
+
+    // #id in the selector
+    const idM = selector.match(/#([\w-]+)/);
+    if (idM) return idM[1].replace(/-/g, ' ');
+
+    // Walk the path segments right-to-left looking for a meaningful tag/class
+    // e.g. "search-slide-toggle" → "search slide toggle"
+    const segments = selector.split(/\s*>\s*/);
+    for (let i = segments.length - 1; i >= 0; i--) {
+      const seg = segments[i].trim();
+      // Strip pseudo/nth selectors
+      const base = seg.replace(/:[\w-]+(\([^)]*\))?/g, '').replace(/\[.*?\]/g, '').trim();
+      // Prefer custom element names (contain a hyphen) or class names that look semantic
+      const tagM = base.match(/^([a-z][\w-]*)(?:\..*)?$/);
+      if (tagM) {
+        const tag = tagM[1];
+        // Skip purely structural tags
+        if (/^(div|span|ul|ol|li|section|article|main|aside|nav|header|footer|form)$/.test(tag)) continue;
+        // Convert kebab-case to words
+        return tag.replace(/-/g, ' ');
+      }
+      // Fallback: first meaningful class on this segment
+      const clsM = base.match(/\.([\w-]{4,})/);
+      if (clsM) return clsM[1].replace(/-/g, ' ').replace(/ng\w*/i, '').trim();
+    }
+
+    // Last resort: truncate the raw selector
+    return selector.length > 50 ? selector.slice(selector.lastIndexOf('>') + 1).trim().slice(0, 50) : selector;
   }
 
   // ---------------------------------------------------------------------------
   // Playback
   // ---------------------------------------------------------------------------
-  async function executeStep(step, index, total) {
+
+  /**
+   * In dev mode, surround the target element with a labelled highlight overlay
+   * for `durationMs` before executing the action.
+   */
+  function showDevHighlight(el, step, durationMs = 900) {
+    // Remove any existing highlight
+    document.getElementById('webpilot-dev-hl')?.remove();
+
+    const rect = el.getBoundingClientRect();
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'webpilot-dev-hl';
+
+    const actionColors = {
+      click:    '#2563eb',
+      type:     '#16a34a',
+      select:   '#d97706',
+      keypress: '#9b1d8a',
+      navigate: '#7c3aed',
+      wait:     '#6b7280',
+    };
+    const color = actionColors[step.action] || '#2563eb';
+
+    Object.assign(overlay.style, {
+      position:     'absolute',
+      top:          `${rect.top + scrollY - 4}px`,
+      left:         `${rect.left + scrollX - 4}px`,
+      width:        `${rect.width + 8}px`,
+      height:       `${rect.height + 8}px`,
+      border:       `2.5px solid ${color}`,
+      borderRadius: '5px',
+      boxShadow:    `0 0 0 3px ${color}33, 0 0 12px ${color}55`,
+      zIndex:       '2147483646',
+      pointerEvents:'none',
+      boxSizing:    'border-box',
+      transition:   'opacity 0.15s',
+    });
+
+    // Label chip above the element
+    const label = document.createElement('div');
+    const actionLabel = step.action.toUpperCase();
+    const desc = step.description ? ` — ${step.description}` : '';
+    label.textContent = `${actionLabel}${desc}`;
+    Object.assign(label.style, {
+      position:       'absolute',
+      bottom:         '100%',
+      left:           '0',
+      marginBottom:   '4px',
+      padding:        '3px 8px',
+      background:     color,
+      color:          '#fff',
+      fontSize:       '11px',
+      fontFamily:     'ui-monospace, monospace',
+      fontWeight:     '600',
+      borderRadius:   '4px',
+      whiteSpace:     'nowrap',
+      maxWidth:       '260px',
+      overflow:       'hidden',
+      textOverflow:   'ellipsis',
+      lineHeight:     '1.4',
+      pointerEvents:  'none',
+    });
+    overlay.appendChild(label);
+
+    document.documentElement.appendChild(overlay);
+
+    return new Promise(resolve => {
+      setTimeout(() => {
+        overlay.style.opacity = '0';
+        setTimeout(() => { overlay.remove(); resolve(); }, 150);
+      }, durationMs);
+    });
+  }
+
+  async function executeStep(step, index, total, devMode = false) {
     const { action, selector, value } = step;
 
     showProgress(index, total, step.description ?? `${action}: ${selector}`);
@@ -618,6 +808,8 @@
 
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     await delay(200);
+
+    if (devMode) await showDevHighlight(el, step);
 
     switch (action) {
       case 'click':
@@ -663,6 +855,21 @@
         el.value = value;
         el.dispatchEvent(new Event('change', { bubbles: true }));
         break;
+
+      case 'keypress': {
+        // Decompose e.g. "Ctrl+Shift+Enter" back into key + modifiers
+        const parts = (value ?? '').split('+');
+        const key   = parts[parts.length - 1];
+        const ctrl  = parts.includes('Ctrl');
+        const meta  = parts.includes('Meta');
+        const alt   = parts.includes('Alt');
+        const shift = parts.includes('Shift');
+        const init  = { key, code: key, bubbles: true, cancelable: true, ctrlKey: ctrl, metaKey: meta, altKey: alt, shiftKey: shift };
+        el.dispatchEvent(new KeyboardEvent('keydown',  init));
+        el.dispatchEvent(new KeyboardEvent('keypress', init));
+        el.dispatchEvent(new KeyboardEvent('keyup',    init));
+        break;
+      }
 
       default:
         throw new Error(`Unknown action: ${action}`);

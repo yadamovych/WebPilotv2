@@ -557,6 +557,14 @@ header {
 }
 .tpl-action-badge.tpl-action-type   { background: #e6f4ea; color: #1a7340; }
 .tpl-action-badge.tpl-action-select { background: #fff4e5; color: #8a5c00; }
+
+.tpl-select-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: #8a5c00;
+  line-height: 1;
+  margin-right: 1px;
+}
 .tpl-action-badge.tpl-action-navigate { background: #fce8ff; color: #6b24a0; }
 .tpl-action-badge.tpl-action-wait   { background: #f3f2f1; color: #605e5c; }
 .tpl-selector-hint {
@@ -729,6 +737,48 @@ header {
   color: var(--muted);
 }
 
+/* ── Dev Mode toggle switch ─────────────────────────────────────────────── */
+.form-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.toggle-label {
+  margin-bottom: 0 !important;
+  flex: 1;
+}
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: #c8c6c4;
+  border-radius: 10px;
+  transition: background var(--transition);
+}
+.toggle-track::before {
+  content: '';
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform var(--transition);
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+}
+.toggle-switch input:checked + .toggle-track { background: var(--primary); }
+.toggle-switch input:checked + .toggle-track::before { transform: translateX(16px); }
+
 .input-addon { position: relative; }
 .input-addon input { padding-right: 36px; }
 .addon-btn {
@@ -892,6 +942,57 @@ textarea { resize: vertical; }
   font-size: 12px;
   color: var(--danger);
   animation: banner-in .15s ease;
+}
+
+/* ── Keyboard key badges ─────────────────────────────────────────────────── */
+.step-key-badge,
+.tpl-key-preview {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  background: #f3f2f1;
+  border: 1.5px solid #c8c6c4;
+  border-bottom-width: 3px;
+  border-radius: 5px;
+  color: #323130;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+  white-space: nowrap;
+  line-height: 1.6;
+  cursor: default;
+  flex-shrink: 0;
+}
+.tpl-action-badge.tpl-action-keypress {
+  background: #fdf2f8;
+  color: #9b1d8a;
+}
+
+/* ── Per-step delay field ────────────────────────────────────────────────── */
+.tpl-delay-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+}
+.tpl-delay-label {
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.tpl-step-delay {
+  width: 70px;
+  padding: 3px 6px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  text-align: right;
+}
+.tpl-delay-unit {
+  font-size: 10.5px;
+  color: var(--muted);
 }
 
 /* ── Date / calendar field badges ───────────────────────────────────────── */
@@ -1199,11 +1300,37 @@ textarea { resize: vertical; }
 .step-info { flex: 1; min-width: 0; }
 
 .step-action {
-  font-size: 10px;
+  display: inline-block;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: .05em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0,103,184,.09);
   color: var(--primary);
-  letter-spacing: .04em;
+}
+.step-action.step-action-type     { background: #e6f4ea; color: #1a7340; }
+.step-action.step-action-select   { background: #fff4e5; color: #8a5c00; }
+.step-action.step-action-keypress { background: #f0eeff; color: #4c35b0; }
+.step-action.step-action-navigate { background: #fce8ff; color: #6b24a0; }
+.step-action.step-action-wait     { background: #f3f2f1; color: #605e5c; }
+
+.step-select-badge {
+  display: inline-block;
+  font-size: 11px;
+  color: #8a5c00;
+  background: #fff4e5;
+  border: 1px solid #f5c860;
+  border-radius: 3px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  font-style: italic;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .step-desc {

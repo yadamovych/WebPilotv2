@@ -144,15 +144,35 @@ async function handleStopRecording() {
 
 function handleRecordAction(action, tabId, sendResponse) {
   if (STATE.recording && tabId === STATE.recordingTabId) {
-    // Deduplication: skip if the last step is identical (same action+selector+value)
-    // within a 1-second window — prevents double-fires from bubbling or re-injection
     const last = STATE.steps[STATE.steps.length - 1];
     const now = Date.now();
+
+    // For type actions on the same element, replace the last step instead of
+    // appending — this way only the final typed value is recorded, not every
+    // debounce snapshot.
+    if (
+      action.action === 'type' &&
+      last &&
+      last.action === 'type' &&
+      last.selector === action.selector
+    ) {
+      STATE.steps[STATE.steps.length - 1] = {
+        ...last,
+        ...action,
+        id: last.id,          // keep stable ID
+        timestamp: now,
+      };
+      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
+      sendResponse({ success: true });
+      return;
+    }
+
+    // Generic deduplication: skip exact duplicate within 1 s
     if (
       last &&
-      last.action    === action.action &&
-      last.selector  === action.selector &&
-      last.value     === action.value &&
+      last.action   === action.action &&
+      last.selector === action.selector &&
+      last.value    === action.value &&
       now - last.timestamp < 1000
     ) {
       sendResponse({ success: true, deduplicated: true });
@@ -164,7 +184,6 @@ function handleRecordAction(action, tabId, sendResponse) {
       id: crypto.randomUUID(),
       timestamp: now,
     });
-    // Notify popup of the updated step list (ignore if popup is closed)
     chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
   }
   sendResponse({ success: true });
@@ -230,7 +249,8 @@ async function handlePlayTemplate(templateId, userRequest, tabId) {
 
     STATE.playback = { active: true, tabId, currentIndex: 0 };
 
-    await executeSteps(tabId, resolvedSteps);
+    const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
+    await executeSteps(tabId, resolvedSteps, !!serverConfig.devMode);
 
     STATE.playback.active = false;
     return { success: true, variables };
@@ -240,7 +260,7 @@ async function handlePlayTemplate(templateId, userRequest, tabId) {
   }
 }
 
-async function executeSteps(tabId, steps) {
+async function executeSteps(tabId, steps, devMode = false) {
   for (let i = 0; i < steps.length; i++) {
     if (!STATE.playback.active) break;
 
@@ -259,13 +279,22 @@ async function executeSteps(tabId, steps) {
       step: steps[i],
       index: i,
       total: steps.length,
+      devMode,
     });
 
     if (result?.error) {
       throw new Error(`Step ${i + 1} failed: ${result.error}`);
     }
 
-    await delay(600);
+    // After a navigate step the page unloads — wait for it to fully reload
+    // then re-inject the content script before executing further steps.
+    if (steps[i].action === 'navigate') {
+      await waitForTabLoad(tabId);
+      await ensureContentScript(tabId);
+    } else {
+      // Per-step delay (default 600 ms if not set)
+      await delay(steps[i].delayMs ?? 600);
+    }
   }
 }
 
@@ -331,6 +360,35 @@ function substituteVariables(steps, variables) {
 // ---------------------------------------------------------------------------
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Wait until the given tab fires status==='complete', with a 15 s safety timeout.
+ * Resolves early if the tab is already complete.
+ */
+function waitForTabLoad(tabId, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    // Check immediately in case the tab already finished loading
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+      if (tab.status === 'complete') { resolve(); return; }
+
+      const timer = setTimeout(() => {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve(); // soft-resolve on timeout so playback can continue
+      }, timeoutMs);
+
+      function listener(updatedTabId, changeInfo) {
+        if (updatedTabId !== tabId) return;
+        if (changeInfo.status === 'complete') {
+          clearTimeout(timer);
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      }
+      chrome.tabs.onUpdated.addListener(listener);
+    });
+  });
 }
 
 /**

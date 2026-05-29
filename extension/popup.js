@@ -55,6 +55,7 @@ function resolveDOM() {
     modelName:       document.getElementById('model-name'),
     btnSaveSettings: document.getElementById('btn-save-settings'),
     settingsStatus:  document.getElementById('settings-status'),
+    devMode:         document.getElementById('dev-mode'),
   };
 }
 
@@ -119,6 +120,7 @@ async function loadSettings() {
   dom.backendSelect.value = serverConfig.backend ?? 'openai';
   dom.apiKey.value = serverConfig.apiKey ?? '';
   dom.modelName.value = serverConfig.model ?? '';
+  dom.devMode.checked = serverConfig.devMode ?? false;
   refreshApiKeyVisibility();
 }
 
@@ -132,6 +134,7 @@ async function saveSettings() {
     backend: dom.backendSelect.value,
     apiKey:  dom.apiKey.value.trim(),
     model:   dom.modelName.value.trim(),
+    devMode: dom.devMode.checked,
   };
   const res = await sendMsg({ type: 'SET_SERVER_CONFIG', config });
   showStatus(dom.settingsStatus, res?.success ? 'Settings saved.' : 'Save failed.', !!res?.success);
@@ -326,7 +329,9 @@ function buildEditorStep(step, index, draft, refresh) {
   li.draggable = true;
   li.dataset.index = index;
 
-  const isType = step.action === 'type';
+  const isType   = step.action === 'type';
+  const isKey    = step.action === 'keypress';
+  const isSelect = step.action === 'select';
   const actionBadge = step.action ?? 'action';
   const selectorHint = step.selector ?? '';
   const varName = step.suggestedVar;
@@ -351,8 +356,25 @@ function buildEditorStep(step, index, draft, refresh) {
             : ''}
         </div>
       ` : ''}
+      ${isKey ? `
+        <div class="tpl-val-row">
+          <kbd class="tpl-key-preview">${esc(step.value ?? '')}</kbd>
+          <input class="tpl-step-val tpl-key-input" type="text" value="${esc(step.value ?? '')}" placeholder="e.g. Enter, Ctrl+Enter, Tab" />
+        </div>
+      ` : ''}
+      ${isSelect ? `
+        <div class="tpl-val-row">
+          <span class="tpl-select-icon">▾</span>
+          <input class="tpl-step-val" type="text" value="${esc(step.value ?? '')}" placeholder="Option to select…" />
+        </div>
+      ` : ''}
       ${selectorHint ? `<div class="tpl-selector-hint" title="CSS selector">${esc(selectorHint)}</div>` : ''}
       ${step.elementHint ? `<div class="tpl-element-hint" title="Recorded DOM element">${esc(step.elementHint)}</div>` : ''}
+      <div class="tpl-delay-row">
+        <label class="tpl-delay-label">Delay after</label>
+        <input class="tpl-step-delay" type="number" min="0" step="100" value="${step.delayMs ?? 600}" />
+        <span class="tpl-delay-unit">ms</span>
+      </div>
     </div>
     <div class="tpl-step-move-btns">
       <button class="btn-icon tpl-move-up" title="Move up" ${index === 0 ? 'disabled' : ''}>
@@ -372,8 +394,18 @@ function buildEditorStep(step, index, draft, refresh) {
   });
   const valInput = li.querySelector('.tpl-step-val');
   if (valInput) {
-    valInput.addEventListener('input', (e) => { draft.steps[index].value = e.target.value; });
+    valInput.addEventListener('input', (e) => {
+      draft.steps[index].value = e.target.value;
+      // Keep kbd preview in sync for keypress steps
+      const preview = li.querySelector('.tpl-key-preview');
+      if (preview) preview.textContent = e.target.value;
+    });
   }
+
+  li.querySelector('.tpl-step-delay').addEventListener('change', (e) => {
+    const v = parseInt(e.target.value, 10);
+    draft.steps[index].delayMs = isNaN(v) || v < 0 ? 0 : v;
+  });
 
   // Variable suggestion button in editor
   li.querySelector('.tpl-var-btn')?.addEventListener('click', () => {
@@ -573,7 +605,9 @@ function buildStepItem(step, index) {
   li.draggable = true;
   li.dataset.index = index;
 
-  const isType = step.action === 'type';
+  const isType   = step.action === 'type';
+  const isKey    = step.action === 'keypress';
+  const isSelect = step.action === 'select';
   const varName = step.suggestedVar;
   const alreadyVar = isType && step.value?.startsWith('{{');
   const isDate = step.fieldType === 'date';
@@ -582,8 +616,10 @@ function buildStepItem(step, index) {
   li.innerHTML = `
     <div class="step-num">${index + 1}</div>
     <div class="step-info">
-      <span class="step-action ${isDate ? 'step-action-date' : ''}">${esc(step.action)}</span>
+      <span class="step-action step-action-${esc(step.action ?? 'action')} ${isDate ? 'step-action-date' : ''}">${esc(step.action)}</span>
       ${isDate ? '<span class="step-field-badge date-badge" title="Calendar / date field">📅</span>' : ''}
+      ${isKey ? `<kbd class="step-key-badge">${esc(step.value ?? '')}</kbd>` : ''}
+      ${isSelect && step.value ? `<span class="step-select-badge">▾ ${esc(step.value)}</span>` : ''}
       <div class="step-desc" title="${esc(step.description ?? step.selector ?? '')}">${esc(step.description ?? step.selector ?? '')}</div>
       ${hint ? `<div class="step-element-hint" title="${esc(hint)}">${esc(hint)}</div>` : ''}
       ${isType && varName && !alreadyVar ? `<button class="var-suggest-btn" data-var="${esc(varName)}" title="Use as AI variable">Use <strong>{{${esc(varName)}}}</strong></button>` : ''}
@@ -611,6 +647,7 @@ function buildStepItem(step, index) {
   li.querySelector('[data-action="edit"]').addEventListener('click', () => editStep(index, li));
   li.querySelector('[data-action="delete"]').addEventListener('click', () => {
     state.steps.splice(index, 1);
+    chrome.runtime.sendMessage({ type: 'UPDATE_STEPS', steps: state.steps }).catch(() => {});
     renderSteps();
   });
 
@@ -625,6 +662,7 @@ function buildStepItem(step, index) {
     if (from !== index) {
       const [moved] = state.steps.splice(from, 1);
       state.steps.splice(index, 0, moved);
+      chrome.runtime.sendMessage({ type: 'UPDATE_STEPS', steps: state.steps }).catch(() => {});
       renderSteps();
     }
   });

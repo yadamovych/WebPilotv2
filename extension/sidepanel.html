@@ -193,6 +193,18 @@
           <input type="text" id="model-name" placeholder="Leave blank for backend default" />
         </div>
 
+        <div class="form-group form-group-toggle">
+          <label for="dev-mode" class="toggle-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            Dev Mode
+            <span class="label-hint">(highlight elements during playback)</span>
+          </label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="dev-mode" />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+
         <button id="btn-save-settings" class="btn-gradient btn-full">Save Settings</button>
         <div id="settings-status" class="status-msg hidden"></div>
       </div>
