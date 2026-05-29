@@ -10,6 +10,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    # Default backend when none is specified in the request (openai/groq/anthropic/vllm)
+    default_backend: str = "openai"
+
     # Cloud provider keys (set server-side; the extension may also pass them per-request)
     openai_api_key: Optional[str] = None
     groq_api_key: Optional[str] = None

@@ -29,7 +29,7 @@ def get_backend(
         api_key: Optional key override from the request.
         model:   Optional model override from the request.
     """
-    name = (name or "openai").lower().strip()
+    name = (name or _settings.default_backend or "openai").lower().strip()
 
     # Treat blank strings the same as None so the backend uses its DEFAULT_MODEL
     model = model.strip() if model else None

@@ -8,6 +8,11 @@
 (function () {
   'use strict';
 
+  // Guard against double-injection (manifest + programmatic ensureContentScript both active).
+  if (window.__webpilotContentLoaded) return;
+  window.__webpilotContentLoaded = true;
+
+
   // Guard against double-injection on dynamic page navigations
   if (window.__webpilotLoaded) return;
   window.__webpilotLoaded = true;
@@ -38,7 +43,7 @@
         break;
 
       case 'EXECUTE_STEP':
-        executeStep(message.step, message.index, message.total, message.devMode)
+        executeStep(message.step, message.index, message.total, message.devMode, message.afterNavigate)
           .then((result) => sendResponse({ success: true, result }))
           .catch((err) => sendResponse({ error: err.message }));
         return true; // async
@@ -201,7 +206,6 @@
     handlers.mouseout = onMouseOut;
     handlers.input = onInput;
     handlers.change = onChange;
-    handlers.keydown = onKeyDown;
 
     // Use bubble phase (false) so we observe without blocking any page interaction
     document.addEventListener('click',     handlers.click,     false);
@@ -209,7 +213,6 @@
     document.addEventListener('mouseout',  handlers.mouseout,  false);
     document.addEventListener('input',     handlers.input,     false);
     document.addEventListener('change',    handlers.change,    false);
-    document.addEventListener('keydown',   handlers.keydown,   false);
   }
 
   function detachListeners() {
@@ -218,55 +221,10 @@
     document.removeEventListener('mouseout',  handlers.mouseout,  false);
     document.removeEventListener('input',     handlers.input,     false);
     document.removeEventListener('change',    handlers.change,    false);
-    document.removeEventListener('keydown',   handlers.keydown,   false);
   }
 
   function isWebPilotEl(el) {
     return el === overlayRoot || overlayRoot?.contains(el);
-  }
-
-  /**
-   * Special / functional keys we want to record.
-   * Regular printable characters are handled by onInput; we only capture
-   * navigation / action keys that have meaningful side-effects.
-   */
-  const RECORD_KEYS = new Set([
-    'Enter', 'Escape', 'Tab',
-    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-    'Home', 'End', 'PageUp', 'PageDown',
-    'Delete', 'Backspace',
-    'F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12',
-  ]);
-
-  function onKeyDown(e) {
-    if (!isRecording || isWebPilotEl(e.target)) return;
-    if (!RECORD_KEYS.has(e.key)) return;
-
-    const el = e.target;
-    const selector = buildSelector(el);
-    const label = getLabel(el) || labelFromSelector(selector);
-
-    // Build a human-readable modifier string, e.g. "Ctrl+Shift+Enter"
-    const modifiers = [
-      e.ctrlKey  ? 'Ctrl'  : '',
-      e.metaKey  ? 'Meta'  : '',
-      e.altKey   ? 'Alt'   : '',
-      e.shiftKey ? 'Shift' : '',
-    ].filter(Boolean);
-    const keyCombo = [...modifiers, e.key].join('+');
-
-    const desc = label ? `Press ${keyCombo} in "${label}"` : `Press ${keyCombo}`;
-    chrome.runtime.sendMessage({
-      type: 'RECORD_ACTION',
-      action: {
-        action: 'keypress',
-        selector,
-        value: keyCombo,
-        label,
-        description: desc,
-        elementHint: elementHint(el),
-      },
-    });
   }
 
   /**
@@ -731,7 +689,6 @@
       click:    '#2563eb',
       type:     '#16a34a',
       select:   '#d97706',
-      keypress: '#9b1d8a',
       navigate: '#7c3aed',
       wait:     '#6b7280',
     };
@@ -788,7 +745,7 @@
     });
   }
 
-  async function executeStep(step, index, total, devMode = false) {
+  async function executeStep(step, index, total, devMode = false, afterNavigate = false) {
     const { action, selector, value } = step;
 
     showProgress(index, total, step.description ?? `${action}: ${selector}`);
@@ -803,7 +760,20 @@
       return { success: true };
     }
 
-    const el = await waitForElement(selector, 6000);
+    // key with no selector — dispatch on currently focused element
+    if (action === 'key' && !selector) {
+      const keyTarget = document.activeElement || document.body;
+      const keyName = value ?? 'Enter';
+      const init = { key: keyName, bubbles: true, cancelable: true };
+      keyTarget.dispatchEvent(new KeyboardEvent('keydown', init));
+      keyTarget.dispatchEvent(new KeyboardEvent('keypress', init));
+      keyTarget.dispatchEvent(new KeyboardEvent('keyup', init));
+      return { success: true };
+    }
+
+    // After a navigate the new page may still be rendering — use a longer timeout
+    const waitTimeout = afterNavigate ? 20000 : 6000;
+    const el = await waitForElement(selector, waitTimeout);
     if (!el) throw new Error(`Element not found: ${selector}`);
 
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -812,9 +782,16 @@
     if (devMode) await showDevHighlight(el, step);
 
     switch (action) {
-      case 'click':
+      case 'click': {
+        // Suppress HTML5 form validation so clicks on submit/search buttons
+        // proceed even if a sibling input holds a type-incompatible value.
+        const form = el.closest('form');
+        const addedNoValidate = form && !form.hasAttribute('novalidate');
+        if (addedNoValidate) form.setAttribute('novalidate', '');
         el.click();
+        if (addedNoValidate) form.removeAttribute('novalidate');
         break;
+      }
 
       case 'type': {
         el.focus();
@@ -837,6 +814,14 @@
           }
         } else {
           // Regular <input> / <textarea>
+          // For constrained input types (number, date, etc.) temporarily relax
+          // the type to 'text' so the browser accepts any string value without
+          // logging a validation warning or silently clearing the field.
+          const CONSTRAINED = ['number','date','datetime-local','time','month','week','range','color'];
+          const savedType = (el instanceof HTMLInputElement && CONSTRAINED.includes(el.type.toLowerCase()))
+            ? el.type : null;
+          if (savedType) { try { el.type = 'text'; } catch (_) {} }
+
           const nativeSetter =
             Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
             Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
@@ -845,6 +830,9 @@
           } else {
             el.value = value ?? '';
           }
+
+          if (savedType) { try { el.type = savedType; } catch (_) {} }
+
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
         }
@@ -856,18 +844,14 @@
         el.dispatchEvent(new Event('change', { bubbles: true }));
         break;
 
-      case 'keypress': {
-        // Decompose e.g. "Ctrl+Shift+Enter" back into key + modifiers
-        const parts = (value ?? '').split('+');
-        const key   = parts[parts.length - 1];
-        const ctrl  = parts.includes('Ctrl');
-        const meta  = parts.includes('Meta');
-        const alt   = parts.includes('Alt');
-        const shift = parts.includes('Shift');
-        const init  = { key, code: key, bubbles: true, cancelable: true, ctrlKey: ctrl, metaKey: meta, altKey: alt, shiftKey: shift };
-        el.dispatchEvent(new KeyboardEvent('keydown',  init));
+      case 'key': {
+        const keyName = value ?? 'Enter';
+        const init = { key: keyName, bubbles: true, cancelable: true };
+        el.focus();
+        await delay(50);
+        el.dispatchEvent(new KeyboardEvent('keydown', init));
         el.dispatchEvent(new KeyboardEvent('keypress', init));
-        el.dispatchEvent(new KeyboardEvent('keyup',    init));
+        el.dispatchEvent(new KeyboardEvent('keyup', init));
         break;
       }
 

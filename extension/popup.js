@@ -9,6 +9,7 @@ const state = {
   steps: [],      // live recorded steps (with id/timestamp metadata)
   templates: {},  // { [id]: templateObject }
   selectedTemplateId: null,
+  devMode: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -117,10 +118,11 @@ function switchTab(name) {
 async function loadSettings() {
   const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
   dom.serverUrl.value = serverConfig.url ?? 'http://localhost:8000';
-  dom.backendSelect.value = serverConfig.backend ?? 'openai';
+  dom.backendSelect.value = serverConfig.backend ?? 'groq';
   dom.apiKey.value = serverConfig.apiKey ?? '';
   dom.modelName.value = serverConfig.model ?? '';
   dom.devMode.checked = serverConfig.devMode ?? false;
+  state.devMode = dom.devMode.checked;
   refreshApiKeyVisibility();
 }
 
@@ -137,6 +139,10 @@ async function saveSettings() {
     devMode: dom.devMode.checked,
   };
   const res = await sendMsg({ type: 'SET_SERVER_CONFIG', config });
+  if (res?.success) {
+    state.devMode = config.devMode;
+    renderTemplates();
+  }
   showStatus(dom.settingsStatus, res?.success ? 'Settings saved.' : 'Save failed.', !!res?.success);
 }
 
@@ -170,29 +176,88 @@ function buildTemplateItem(tpl) {
   const stepWord = tpl.steps.length !== 1 ? 'steps' : 'step';
 
   li.innerHTML = `
-    <div class="template-card-row">
+    <div class="template-card-top">
+      <div class="template-card-icon" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0067b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+      </div>
       <div class="template-body">
         <div class="template-name">${esc(tpl.name)}</div>
         <div class="template-meta">${tpl.steps.length} ${stepWord} &middot; ${date}</div>
       </div>
-      <div class="template-actions">
-        <button class="btn-play">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Run
-        </button>
-        <button class="btn-edit-tpl" title="Edit workflow">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Edit
-        </button>
-        <button class="btn-danger">Delete</button>
-      </div>
+    </div>
+    <div class="template-actions">
+      <button class="btn-play">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Run
+      </button>
+      <button class="btn-edit-tpl" title="Edit workflow">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Edit
+      </button>
+      ${state.devMode ? `<button class="btn-json-tpl" title="View JSON">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        JSON
+      </button>` : ''}
+      <button class="btn-danger">Delete</button>
     </div>
   `;
 
   li.querySelector('.btn-play').addEventListener('click', () => openPlayPanel(tpl));
   li.querySelector('.btn-edit-tpl').addEventListener('click', () => toggleTemplateEditor(tpl, li));
+  li.querySelector('.btn-json-tpl')?.addEventListener('click', () => openJsonModal(tpl));
   li.querySelector('.btn-danger').addEventListener('click', (e) => confirmDeleteTemplate(tpl.id, e.currentTarget));
   return li;
+}
+
+// ---------------------------------------------------------------------------
+// JSON modal
+// ---------------------------------------------------------------------------
+function openJsonModal(tpl) {
+  const modal  = document.getElementById('json-modal');
+  const body   = document.getElementById('json-modal-body');
+  const errMsg = document.getElementById('json-modal-error');
+  if (!modal || !body) {
+    alert('JSON viewer unavailable — please reload the extension in chrome://extensions');
+    return;
+  }
+
+  body.value = JSON.stringify(tpl, null, 2);
+  errMsg.classList.add('hidden');
+  errMsg.textContent = '';
+  modal.classList.remove('hidden');
+  body.focus();
+
+  const close = () => modal.classList.add('hidden');
+  document.getElementById('json-modal-close').onclick  = close;
+  document.getElementById('json-modal-close2').onclick = close;
+  modal.addEventListener('click', (e) => { if (e.target === modal) close(); }, { once: true });
+
+  document.getElementById('json-modal-copy').onclick = async () => {
+    await navigator.clipboard.writeText(body.value);
+    const btn = document.getElementById('json-modal-copy');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  };
+
+  document.getElementById('json-modal-save').onclick = async () => {
+    errMsg.classList.add('hidden');
+    let parsed;
+    try {
+      parsed = JSON.parse(body.value);
+    } catch (e) {
+      errMsg.textContent = 'Invalid JSON: ' + e.message;
+      errMsg.classList.remove('hidden');
+      return;
+    }
+    if (!parsed.id || !Array.isArray(parsed.steps)) {
+      errMsg.textContent = 'JSON must have "id" and "steps" fields.';
+      errMsg.classList.remove('hidden');
+      return;
+    }
+    await saveEditedTemplate(parsed);
+    close();
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -225,17 +290,38 @@ function openTemplateEditor(tpl, li) {
     </div>
     <div class="tpl-editor-steps-header">
       <span class="edit-label">Steps</span>
-      <button class="btn-record-step tpl-rec-btn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-        <span class="tpl-rec-label">Record Step</span>
-      </button>
+      <div class="tpl-step-btns">
+        <button class="btn-record-step tpl-rec-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          <span class="tpl-rec-label">Record Step</span>
+        </button>
+        <button class="btn-add-manual tpl-add-manual-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Step
+        </button>
+      </div>
     </div>
     <div class="tpl-rec-banner hidden">
       <span class="pulse-ring"></span>
       <span>Recording active — interact with the page, then click <strong>⏹ Stop</strong></span>
     </div>
     <ul class="tpl-steps-list"></ul>
-    <div class="tpl-steps-empty hidden"><p>No steps — press <strong>Record Step</strong> or add steps above.</p></div>
+    <div class="tpl-add-form hidden">
+      <select class="add-form-action">
+        <option value="click">click</option>
+        <option value="type">type</option>
+        <option value="select">select</option>
+        <option value="key">key</option>
+        <option value="navigate">navigate</option>
+        <option value="wait">wait</option>
+      </select>
+      <input class="add-form-selector" placeholder="CSS selector" />
+      <input class="add-form-value" placeholder="Value…" style="display:none" />
+      <input class="add-form-label" placeholder="Label (optional)" />
+      <button class="btn-gradient btn-xs add-form-ok">Add</button>
+      <button class="btn-ghost-xs add-form-cancel">✕</button>
+    </div>
+    <div class="tpl-steps-empty hidden"><p>No steps yet — record or add steps manually.</p></div>
     <div class="tpl-editor-footer">
       <button class="btn-gradient btn-sm tpl-save">Save workflow</button>
       <button class="btn-ghost-sm tpl-cancel">Cancel</button>
@@ -247,6 +333,70 @@ function openTemplateEditor(tpl, li) {
   const recBtn      = editor.querySelector('.tpl-rec-btn');
   const recLabel    = editor.querySelector('.tpl-rec-label');
   const recBanner   = editor.querySelector('.tpl-rec-banner');
+
+  // ---- Add Step form ----
+  const addBtn         = editor.querySelector('.tpl-add-manual-btn');
+  const addForm        = editor.querySelector('.tpl-add-form');
+  const addFormAction  = addForm.querySelector('.add-form-action');
+  const addFormSel     = addForm.querySelector('.add-form-selector');
+  const addFormVal     = addForm.querySelector('.add-form-value');
+  const addFormLabel   = addForm.querySelector('.add-form-label');
+
+  const NO_SELECTOR = new Set(['navigate', 'wait']);
+  const NO_VALUE    = new Set(['click']);
+  const VAL_PLACEHOLDERS = {
+    type:     'Value or {{variable}}…',
+    select:   'Option text to select…',
+    key:      'Key name (Enter, Tab, Escape, Space, Backspace…)',
+    navigate: 'URL (https://…)',
+    wait:     'Delay in ms (e.g. 1000)',
+  };
+
+  const syncAddFormFields = () => {
+    const a = addFormAction.value;
+    addFormSel.style.display = NO_SELECTOR.has(a) ? 'none' : '';
+    addFormSel.placeholder   = a === 'key' ? 'CSS selector (optional)' : 'CSS selector';
+    addFormVal.style.display = NO_VALUE.has(a) ? 'none' : '';
+    addFormVal.placeholder   = VAL_PLACEHOLDERS[a] ?? 'Value…';
+  };
+  addFormAction.addEventListener('change', syncAddFormFields);
+  syncAddFormFields();
+
+  addBtn.addEventListener('click', () => {
+    addForm.classList.toggle('hidden');
+    if (!addForm.classList.contains('hidden')) addFormSel.focus();
+  });
+
+  addForm.querySelector('.add-form-cancel').addEventListener('click', () => {
+    addForm.classList.add('hidden');
+  });
+
+  addForm.querySelector('.add-form-ok').addEventListener('click', () => {
+    const action   = addFormAction.value;
+    const selector = addFormSel.value.trim();
+    const value    = addFormVal.value.trim();
+    const label    = addFormLabel.value.trim();
+
+    if (!NO_SELECTOR.has(action) && action !== 'key' && !selector) { addFormSel.focus(); return; }
+    if (!NO_VALUE.has(action) && !value) { addFormVal.focus(); return; }
+
+    const step = {
+      action,
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      description: label || [action, selector, value].filter(Boolean).join(' → '),
+    };
+    if (label)    step.label    = label;
+    if (selector) step.selector = selector;
+    if (value)    step.value    = value;
+
+    draft.steps.push(step);
+    addFormSel.value = ''; addFormVal.value = ''; addFormLabel.value = '';
+    addForm.classList.add('hidden');
+    syncAddFormFields();
+    renderEditorSteps();
+  });
+  // ----------------------
 
   let editorRecording = false;
 
@@ -326,12 +476,11 @@ function openTemplateEditor(tpl, li) {
 function buildEditorStep(step, index, draft, refresh) {
   const li = document.createElement('li');
   li.className = 'tpl-step-row';
-  li.draggable = true;
   li.dataset.index = index;
 
   const isType   = step.action === 'type';
-  const isKey    = step.action === 'keypress';
   const isSelect = step.action === 'select';
+  const isKey    = step.action === 'key';
   const actionBadge = step.action ?? 'action';
   const selectorHint = step.selector ?? '';
   const varName = step.suggestedVar;
@@ -356,20 +505,27 @@ function buildEditorStep(step, index, draft, refresh) {
             : ''}
         </div>
       ` : ''}
-      ${isKey ? `
-        <div class="tpl-val-row">
-          <kbd class="tpl-key-preview">${esc(step.value ?? '')}</kbd>
-          <input class="tpl-step-val tpl-key-input" type="text" value="${esc(step.value ?? '')}" placeholder="e.g. Enter, Ctrl+Enter, Tab" />
-        </div>
-      ` : ''}
       ${isSelect ? `
         <div class="tpl-val-row">
           <span class="tpl-select-icon">▾</span>
           <input class="tpl-step-val" type="text" value="${esc(step.value ?? '')}" placeholder="Option to select…" />
         </div>
       ` : ''}
-      ${selectorHint ? `<div class="tpl-selector-hint" title="CSS selector">${esc(selectorHint)}</div>` : ''}
-      ${step.elementHint ? `<div class="tpl-element-hint" title="Recorded DOM element">${esc(step.elementHint)}</div>` : ''}
+      ${isKey ? `
+        <div class="tpl-val-row">
+          <span class="tpl-key-icon" title="Key to press">⌨</span>
+          <input class="tpl-step-val" type="text" value="${esc(step.value ?? 'Enter')}" placeholder="Key name (Enter, Tab, Escape, Space…)" />
+        </div>
+      ` : ''}
+      ${selectorHint || step.elementHint ? `
+        <div class="tpl-hint-wrap">
+          <button type="button" class="tpl-hint-btn" tabindex="-1" aria-label="Element info">ⓘ</button>
+          <div class="tpl-hint-popup">
+            ${selectorHint ? `<div class="tpl-hint-row"><span class="tpl-hint-label">Selector</span><code>${esc(selectorHint)}</code></div>` : ''}
+            ${step.elementHint ? `<div class="tpl-hint-row"><span class="tpl-hint-label">DOM</span><code>${esc(step.elementHint)}</code></div>` : ''}
+          </div>
+        </div>
+      ` : ''}
       <div class="tpl-delay-row">
         <label class="tpl-delay-label">Delay after</label>
         <input class="tpl-step-delay" type="number" min="0" step="100" value="${step.delayMs ?? 600}" />
@@ -396,9 +552,6 @@ function buildEditorStep(step, index, draft, refresh) {
   if (valInput) {
     valInput.addEventListener('input', (e) => {
       draft.steps[index].value = e.target.value;
-      // Keep kbd preview in sync for keypress steps
-      const preview = li.querySelector('.tpl-key-preview');
-      if (preview) preview.textContent = e.target.value;
     });
   }
 
@@ -432,12 +585,14 @@ function buildEditorStep(step, index, draft, refresh) {
     refresh();
   });
 
-  // Drag-to-reorder
+  // Drag-to-reorder — only via the drag handle
+  const handle = li.querySelector('.tpl-drag-handle');
+  handle.addEventListener('mousedown', () => { li.draggable = true; });
   li.addEventListener('dragstart', (e) => {
     e.dataTransfer.setData('text/plain', String(index));
     li.classList.add('dragging');
   });
-  li.addEventListener('dragend', () => li.classList.remove('dragging'));
+  li.addEventListener('dragend', () => { li.draggable = false; li.classList.remove('dragging'); });
   li.addEventListener('dragover', (e) => { e.preventDefault(); li.classList.add('drag-over'); });
   li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
   li.addEventListener('drop', (e) => {
@@ -472,6 +627,28 @@ function openPlayPanel(tpl) {
   dom.playPanel.classList.remove('hidden');
   dom.playStatus.className = 'status-msg hidden';
   dom.userRequest.value = '';
+
+  // Extract {{variable}} names from template steps and show as a hint
+  const vars = new Set();
+  for (const step of tpl.steps ?? []) {
+    for (const [, name] of (step.value ?? '').matchAll(/\{\{(\w+)\}\}/g)) {
+      vars.add(name);
+    }
+  }
+  let hint = document.getElementById('play-vars-hint');
+  if (!hint) {
+    hint = document.createElement('p');
+    hint.id = 'play-vars-hint';
+    hint.className = 'play-vars-hint';
+    dom.userRequest.parentElement.after(hint);
+  }
+  if (vars.size > 0) {
+    hint.textContent = `⚠ Mention in your prompt: ${[...vars].map(v => `{{${v}}}`).join(', ')}`;
+    hint.classList.remove('hidden');
+  } else {
+    hint.classList.add('hidden');
+  }
+
   dom.userRequest.focus();
 }
 
@@ -602,11 +779,9 @@ function renderSteps() {
 function buildStepItem(step, index) {
   const li = document.createElement('li');
   li.className = 'step-item';
-  li.draggable = true;
   li.dataset.index = index;
 
   const isType   = step.action === 'type';
-  const isKey    = step.action === 'keypress';
   const isSelect = step.action === 'select';
   const varName = step.suggestedVar;
   const alreadyVar = isType && step.value?.startsWith('{{');
@@ -614,11 +789,13 @@ function buildStepItem(step, index) {
   const hint = step.elementHint ?? step.selector ?? '';
 
   li.innerHTML = `
+    <span class="step-drag-handle" title="Drag to reorder">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/></svg>
+    </span>
     <div class="step-num">${index + 1}</div>
     <div class="step-info">
       <span class="step-action step-action-${esc(step.action ?? 'action')} ${isDate ? 'step-action-date' : ''}">${esc(step.action)}</span>
       ${isDate ? '<span class="step-field-badge date-badge" title="Calendar / date field">📅</span>' : ''}
-      ${isKey ? `<kbd class="step-key-badge">${esc(step.value ?? '')}</kbd>` : ''}
       ${isSelect && step.value ? `<span class="step-select-badge">▾ ${esc(step.value)}</span>` : ''}
       <div class="step-desc" title="${esc(step.description ?? step.selector ?? '')}">${esc(step.description ?? step.selector ?? '')}</div>
       ${hint ? `<div class="step-element-hint" title="${esc(hint)}">${esc(hint)}</div>` : ''}
@@ -651,8 +828,13 @@ function buildStepItem(step, index) {
     renderSteps();
   });
 
-  // Drag-to-reorder
-  li.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', String(index)));
+  // Drag-to-reorder — only via the drag handle
+  const handle = li.querySelector('.step-drag-handle');
+  handle.addEventListener('mousedown', () => { li.draggable = true; });
+  li.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData('text/plain', String(index));
+  });
+  li.addEventListener('dragend', () => { li.draggable = false; });
   li.addEventListener('dragover',  (e) => { e.preventDefault(); li.classList.add('drag-over'); });
   li.addEventListener('dragleave', ()  => li.classList.remove('drag-over'));
   li.addEventListener('drop', (e) => {
@@ -758,9 +940,12 @@ function onBackgroundMessage(message) {
     }
   } else if (message.type === 'PLAYBACK_PROGRESS') {
     if (!dom.playStatus.classList.contains('error')) {
+      const retry = message.retryAttempt
+        ? ` (retry ${message.retryAttempt}/${message.retryMax})`
+        : '';
       setStatus(
         dom.playStatus,
-        `Running step ${message.currentIndex + 1} / ${message.total}…`,
+        `Running step ${message.currentIndex + 1} / ${message.total}${retry}…`,
         ''
       );
     }

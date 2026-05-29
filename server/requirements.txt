@@ -5,7 +5,7 @@ anthropic>=0.30.0
 
 # Web framework
 fastapi>=0.111.0
-uvicorn[standard]==0.22.0
+uvicorn[standard]>=0.22.0
 
 # Config & validation
 pydantic>=2.7.0

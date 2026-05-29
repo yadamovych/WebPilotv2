@@ -98,7 +98,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
   // Re-inject and resume recording on the freshly-loaded page
   ensureContentScript(tabId)
-    .then(() => chrome.tabs.sendMessage(tabId, { type: 'START_RECORDING' }))
+    .then(() => broadcastToFrames(tabId, { type: 'START_RECORDING' }))
     .catch(() => {
       // Silently ignore restricted pages (chrome://, etc.)
     });
@@ -122,7 +122,7 @@ async function handleStartRecording(tabId) {
     STATE.recordingTabId = tabId;
     // Do NOT clear steps here — user may be adding more steps to an existing session
 
-    await chrome.tabs.sendMessage(tabId, { type: 'START_RECORDING' });
+    await broadcastToFrames(tabId, { type: 'START_RECORDING' });
     return { success: true, tabId };
   } catch (err) {
     STATE.recording = false;
@@ -133,7 +133,7 @@ async function handleStartRecording(tabId) {
 async function handleStopRecording() {
   try {
     if (STATE.recordingTabId) {
-      await chrome.tabs.sendMessage(STATE.recordingTabId, { type: 'STOP_RECORDING' }).catch(() => {});
+      await broadcastToFrames(STATE.recordingTabId, { type: 'STOP_RECORDING' }).catch(() => {});
     }
   } finally {
     STATE.recording = false;
@@ -274,16 +274,34 @@ async function executeSteps(tabId, steps, devMode = false) {
       step: steps[i],
     }).catch(() => {});
 
-    const result = await chrome.tabs.sendMessage(tabId, {
-      type: 'EXECUTE_STEP',
-      step: steps[i],
-      index: i,
-      total: steps.length,
-      devMode,
-    });
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 1000;
+    let result;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      result = await chrome.tabs.sendMessage(tabId, {
+        type: 'EXECUTE_STEP',
+        step: steps[i],
+        index: i,
+        total: steps.length,
+        devMode,
+        afterNavigate: attempt > 1 || (i > 0 && steps[i - 1].action === 'navigate'),
+      });
+      if (!result?.error) break;
+      if (attempt < MAX_RETRIES) {
+        chrome.runtime.sendMessage({
+          type: 'PLAYBACK_PROGRESS',
+          currentIndex: i,
+          total: steps.length,
+          step: steps[i],
+          retryAttempt: attempt,
+          retryMax: MAX_RETRIES,
+        }).catch(() => {});
+        await delay(RETRY_DELAY_MS);
+      }
+    }
 
     if (result?.error) {
-      throw new Error(`Step ${i + 1} failed: ${result.error}`);
+      throw new Error(`Step ${i + 1} failed after ${MAX_RETRIES} attempts: ${result.error}`);
     }
 
     // After a navigate step the page unloads — wait for it to fully reload
@@ -291,6 +309,8 @@ async function executeSteps(tabId, steps, devMode = false) {
     if (steps[i].action === 'navigate') {
       await waitForTabLoad(tabId);
       await ensureContentScript(tabId);
+      // Small settling delay for SPAs that render after the load event
+      await delay(300);
     } else {
       // Per-step delay (default 600 ms if not set)
       await delay(steps[i].delayMs ?? 600);
@@ -326,7 +346,7 @@ async function fillTemplateVariables(template, userRequest) {
       variables: Array.from(variableNames),
       templateName: template.name,
       templateDescription: template.description ?? '',
-      backend: serverConfig.backend ?? 'openai',
+      backend: serverConfig.backend ?? 'groq',
       // API key is sent only when the user has opted to pass it from the extension.
       // For production deployments, configure keys server-side via environment variables
       // and omit apiKey here.
@@ -360,6 +380,19 @@ function substituteVariables(steps, variables) {
 // ---------------------------------------------------------------------------
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Broadcast a message to every frame in a tab (top + all iframes).
+ * Errors from individual frames (e.g. sandboxed iframes) are silently ignored.
+ */
+async function broadcastToFrames(tabId, message) {
+  const frames = await chrome.webNavigation.getAllFrames({ tabId }).catch(() => []);
+  await Promise.allSettled(
+    (frames ?? []).map(({ frameId }) =>
+      chrome.tabs.sendMessage(tabId, message, { frameId }).catch(() => {})
+    )
+  );
 }
 
 /**
@@ -430,7 +463,7 @@ async function ensureContentScript(tabId) {
 
   // Inject the content script programmatically
   await chrome.scripting.executeScript({
-    target: { tabId },
+    target: { tabId, allFrames: true },
     files: ['content.js'],
   });
 

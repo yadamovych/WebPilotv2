@@ -50,7 +50,7 @@ class FillTemplateRequest(BaseModel):
     variables: list[str] = Field(..., description="List of {{variable}} names to fill")
     templateName: str = Field(..., description="Name of the automation template")
     templateDescription: Optional[str] = Field(default="", description="Optional template description")
-    backend: Optional[str] = Field(default="openai", description="AI backend to use")
+    backend: Optional[str] = Field(default=None, description="AI backend to use")
     # API key can be supplied by the extension for convenience; for production
     # deployments configure keys via server-side environment variables instead.
     apiKey: Optional[str] = Field(default=None, description="API key (optional if set server-side)")
@@ -78,7 +78,7 @@ class UsageInfo(BaseModel):
 
 class PromptRequest(BaseModel):
     prompt: str
-    backend: Optional[str] = "openai"
+    backend: Optional[str] = None
     apiKey: Optional[str] = None
     model: Optional[str] = None
     systemPrompt: Optional[str] = None

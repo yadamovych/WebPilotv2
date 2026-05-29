@@ -45,6 +45,8 @@ cd extension/icons && python3 generate_icons.py   # generate placeholder PNGs
 ```bash
 cd server
 cp .env.example .env          # fill in at least one API key
+python3 -m venv .venv
+source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app:app --reload      # http://localhost:8000
 ```

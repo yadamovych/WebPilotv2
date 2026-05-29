@@ -199,6 +199,25 @@ E.g. Create a Jira ticket for PR-Agent deployment"
     </section>
 
   </div>
+  <!-- ── JSON View Modal ──────────────────────────────────────────────── -->
+  <div id="json-modal" class="json-modal hidden" role="dialog" aria-modal="true" aria-label="Workflow JSON">
+    <div class="json-modal-box">
+      <div class="json-modal-header">
+        <span class="json-modal-title">Workflow JSON</span>
+        <button id="json-modal-close" class="btn-close" title="Close">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <textarea id="json-modal-body" class="json-modal-body" spellcheck="false"></textarea>
+      <div class="json-modal-footer">
+        <button id="json-modal-save" class="btn-gradient btn-sm">Save</button>
+        <button id="json-modal-copy" class="btn-ghost-sm">Copy</button>
+        <button id="json-modal-close2" class="btn-ghost-sm">Close</button>
+        <span id="json-modal-error" class="json-modal-error hidden"></span>
+      </div>
+    </div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>
