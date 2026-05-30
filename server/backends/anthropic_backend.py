@@ -18,7 +18,7 @@ class AnthropicBackend(BaseBackend):
     async def complete(self, system_prompt: str, user_prompt: str) -> CompletionResult:
         message = await self._client.messages.create(
             model=self._model,
-            max_tokens=1024,
+            max_tokens=2048,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
         )

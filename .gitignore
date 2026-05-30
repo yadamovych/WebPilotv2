@@ -21,3 +21,12 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Terraform
+infra/.terraform/
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+infra/terraform.tfstate.*.backup
+infra/*.tfvars
+# Keep the lock file (provider version pinning — like package-lock.json)
+!infra/.terraform.lock.hcl

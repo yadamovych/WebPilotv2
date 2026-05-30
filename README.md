@@ -15,13 +15,32 @@ extension/          Chrome/Edge extension (Manifest V3)
 server/             FastAPI AI inference server
   app.py            REST + WebSocket API
   config.py         Environment-based configuration
+  requirements.txt          Runtime dependencies
+  requirements-dev.txt      Dev/CI dependencies (pytest, black, mypy, …)
   backends/
     openai_backend.py
     groq_backend.py
     anthropic_backend.py
     vllm_backend.py
+  tests/
+    conftest.py
+    test_app.py
 
-docker-compose.yml           Cloud AI backends (OpenAI / Groq / Anthropic)
+infra/              Terraform — AWS infrastructure as code
+  main.tf           Provider config + optional S3 backend
+  variables.tf      All inputs (region, instance type, …)
+  network.tf        VPC, public subnet, security groups
+  ecr.tf            ECR repository + lifecycle policy
+  iam.tf            EC2 role, ECS task execution role, GitHub OIDC role
+  ssm.tf            SSM SecureString parameters for API keys
+  ecs.tf            ECS cluster, t2.micro launch template, task def, service
+  outputs.tf        Values to copy into GitHub Actions variables
+
+.github/workflows/
+  ci.yml            CI: lint, type-check, test, Docker build check, security scan
+  cd.yml            CD: build → push to ECR → rolling deploy to ECS
+
+docker-compose.yml           Local dev with cloud AI backends (OpenAI / Groq / Anthropic)
 docker-compose.vllm.yml      Local vLLM on NVIDIA GPU
 ```
 
@@ -185,6 +204,119 @@ API keys can be configured server-side (`.env`) or passed per-request from the e
 # Server with auto-reload
 cd server && uvicorn app:app --reload
 
-# Run tests (add pytest to requirements-dev.txt as needed)
+# Install dev dependencies
+cd server && pip install -r requirements-dev.txt
+
+# Run tests
 pytest server/
+
+# Run tests with coverage
+pytest server/ --cov=server --cov-report=term-missing
+
+# Lint + format check
+flake8 server/
+black --check server/ --line-length=120
+
+# Type check
+mypy server/ --ignore-missing-imports
 ```
+
+---
+
+## Infrastructure (AWS — free tier)
+
+All AWS resources are defined in `infra/` using Terraform. The setup uses:
+
+| Resource | Free tier |  |
+|---|---|---|
+| EC2 t2.micro | 750 h/month (12 months) | ECS container host |
+| ECR | 500 MB/month | Docker image registry |
+| SSM Parameter Store (standard) | Free | API key storage |
+| CloudWatch Logs | 5 GB/month | Container logs |
+| VPC / Subnet / IGW / SG | Free | Networking |
+
+> No ALB, no NAT gateway, no Fargate — all kept within free-tier limits.
+
+### Prerequisites
+
+- [Terraform ≥ 1.5](https://developer.hashicorp.com/terraform/install)
+- AWS CLI configured (`aws configure`) with an IAM user that has admin access
+
+### First-time setup
+
+```bash
+cd infra
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars — set github_repo to "your-org/WebPilotv2"
+
+terraform init
+terraform plan
+terraform apply
+```
+
+After apply, Terraform prints all values you need to configure GitHub Actions:
+
+```
+Outputs:
+  ecr_repository_name        → ECR_REPOSITORY
+  aws_region                 → AWS_REGION
+  ecs_cluster_name           → ECS_CLUSTER
+  ecs_service_name           → ECS_SERVICE
+  ecs_task_definition_family → ECS_TASK_DEFINITION
+  container_name             → CONTAINER_NAME
+  github_actions_role_arn    → AWS_ROLE_TO_ASSUME (secret)
+```
+
+### Set API keys in SSM
+
+API keys are stored as SSM SecureString parameters — never in code or GitHub secrets.
+
+```bash
+aws ssm put-parameter --name "/webpilot/openai_api_key" \
+  --value "sk-..." --type SecureString --overwrite
+
+aws ssm put-parameter --name "/webpilot/groq_api_key" \
+  --value "gsk_..." --type SecureString --overwrite
+
+aws ssm put-parameter --name "/webpilot/anthropic_api_key" \
+  --value "sk-ant-..." --type SecureString --overwrite
+```
+
+### Tear down
+
+```bash
+cd infra && terraform destroy
+```
+
+---
+
+## CI/CD (GitHub Actions)
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| **CI** (`.github/workflows/ci.yml`) | Push / PR to `main`, `develop` | Lint, type-check, test (Python 3.10–3.12), Docker build, security scan |
+| **CD** (`.github/workflows/cd.yml`) | Push to `main` or `v*.*.*` tag | Build image → push to ECR → rolling deploy to ECS |
+
+### GitHub Actions setup
+
+After running `terraform apply`, copy the outputs into your repository
+(**Settings → Secrets and Variables → Actions**):
+
+**Variables** (non-secret):
+
+| Name | Source |
+|---|---|
+| `AWS_REGION` | `terraform output aws_region` |
+| `ECR_REPOSITORY` | `terraform output ecr_repository_name` |
+| `ECS_CLUSTER` | `terraform output ecs_cluster_name` |
+| `ECS_SERVICE` | `terraform output ecs_service_name` |
+| `ECS_TASK_DEFINITION` | `terraform output ecs_task_definition_family` |
+| `CONTAINER_NAME` | `terraform output container_name` |
+
+**Secrets**:
+
+| Name | Source |
+|---|---|
+| `AWS_ROLE_TO_ASSUME` | `terraform output github_actions_role_arn` |
+
+The CD workflow authenticates to AWS using **OIDC** (no long-lived access keys stored in GitHub).

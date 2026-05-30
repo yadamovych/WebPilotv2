@@ -43,7 +43,7 @@ class VLLMBackend(BaseBackend):
                 {"role": "user",   "content": user_prompt},
             ],
             temperature=0.3,
-            max_tokens=1024,
+            max_tokens=2048,
         )
         usage = response.usage
         in_tok  = usage.prompt_tokens     if usage else 0
