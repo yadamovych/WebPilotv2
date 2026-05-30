@@ -106,7 +106,7 @@ function bindStaticEvents() {
     dom.apiKey.type = dom.apiKey.type === 'password' ? 'text' : 'password';
   });
   dom.btnSaveSettings.addEventListener('click', saveSettings);
-  dom.btnCheckServer.addEventListener('click', () => checkServerHealth(true));
+  dom.btnCheckServer?.addEventListener('click', () => checkServerHealth(true));
 
   // Background → popup messages (e.g. live step updates while popup is open)
   chrome.runtime.onMessage.addListener(onBackgroundMessage);
@@ -161,14 +161,18 @@ async function saveSettings() {
 async function checkServerHealth(showResult = false) {
   const url = (dom.serverUrl?.value || 'http://localhost:8000').replace(/\/$/, '');
 
-  dom.serverStatus.className = 'server-status checking';
-  dom.statusLabel.textContent = '…';
+  if (dom.serverStatus) {
+    dom.serverStatus.className = 'server-status checking';
+    dom.statusLabel.textContent = '…';
+  }
 
   try {
     const resp = await fetch(`${url}/health`, { signal: AbortSignal.timeout(4000) });
     const ok = resp.ok;
-    dom.serverStatus.className = `server-status ${ok ? 'online' : 'offline'}`;
-    dom.statusLabel.textContent = ok ? 'Online' : `${resp.status}`;
+    if (dom.serverStatus) {
+      dom.serverStatus.className = `server-status ${ok ? 'online' : 'offline'}`;
+      dom.statusLabel.textContent = ok ? 'Online' : `${resp.status}`;
+    }
     if (showResult) {
       showStatus(
         dom.settingsStatus,
@@ -177,8 +181,10 @@ async function checkServerHealth(showResult = false) {
       );
     }
   } catch {
-    dom.serverStatus.className = 'server-status offline';
-    dom.statusLabel.textContent = 'Offline';
+    if (dom.serverStatus) {
+      dom.serverStatus.className = 'server-status offline';
+      dom.statusLabel.textContent = 'Offline';
+    }
     if (showResult) {
       showStatus(dom.settingsStatus, `Cannot reach server at ${url}`, false);
     }
