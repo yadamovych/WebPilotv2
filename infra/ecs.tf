@@ -92,8 +92,20 @@ resource "aws_launch_template" "ecs_host" {
   # Register this instance with the ECS cluster on first boot
   user_data = base64encode(<<-EOF
     #!/bin/bash
+    # Register with ECS cluster
     echo ECS_CLUSTER=${aws_ecs_cluster.main.name}       >> /etc/ecs/ecs.config
     echo ECS_ENABLE_CONTAINER_METADATA=true             >> /etc/ecs/ecs.config
+
+    %{if var.duckdns_token != "" && var.duckdns_subdomain != ""~}
+    # Update DuckDNS with current public IP on every boot
+    curl -fsSL \
+      "https://www.duckdns.org/update?domains=${var.duckdns_subdomain}&token=${var.duckdns_token}&ip=" \
+      -o /var/log/duckdns.log
+
+    # Re-run on every reboot via cron
+    echo "@reboot root curl -fsSL 'https://www.duckdns.org/update?domains=${var.duckdns_subdomain}&token=${var.duckdns_token}&ip=' -o /var/log/duckdns.log" \
+      > /etc/cron.d/duckdns
+    %{endif~}
   EOF
   )
 

@@ -8,3 +8,8 @@ github_repo  = "your-org/WebPilotv2"   # e.g. "acme/WebPilotv2"
 # task_cpu              = 256
 # task_memory           = 512
 # allowed_ingress_cidrs = ["203.0.113.10/32"]   # restrict to your IP
+
+# DuckDNS dynamic DNS (optional — leave blank to skip)
+# Get your token at https://www.duckdns.org
+# duckdns_token     = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+# duckdns_subdomain = "webpilot"   # → webpilot.duckdns.org

@@ -45,3 +45,16 @@ variable "allowed_ingress_cidrs" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
+
+variable "duckdns_token" {
+  description = "DuckDNS token for dynamic DNS updates. Leave empty to skip DNS registration."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "duckdns_subdomain" {
+  description = "DuckDNS subdomain (without .duckdns.org), e.g. 'webpilot'."
+  type        = string
+  default     = ""
+}
