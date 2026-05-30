@@ -45,14 +45,20 @@ env:
 
 jobs:
   # ==========================================================================
-  # GATE: Only deploy if CI passed
+  # GATE: Block CD until the CI workflow on the same commit is green
   # ==========================================================================
   ci-gate:
     name: Wait for CI
     runs-on: ubuntu-latest
     steps:
-      - name: Check CI status
-        run: echo "CI passed — proceeding with CD"
+      - name: Wait for CI workflow to succeed
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-name: CI Status   # must match the job name in ci.yml
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+          allowed-conclusions: success
 
   # ==========================================================================
   # BUILD & PUSH: Docker image → Amazon ECR
@@ -182,7 +188,3 @@ jobs:
           echo "| Deploy (ECS) | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Cluster: \`${{ vars.ECS_CLUSTER }}\`  Service: \`${{ vars.ECS_SERVICE }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ needs.build-push.result }}" == "success" ]]; then
-            echo "Image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> $GITHUB_STEP_SUMMARY
-          fi

@@ -74,14 +74,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: "18"
-          cache: "npm"
+          node-version: "20"
+          # Only cache if package-lock.json exists; avoids cache errors on plain-JS extensions
+          cache: ${{ hashFiles('extension/package-lock.json') != '' && 'npm' || '' }}
 
       - name: Install dependencies
         run: |
-          npm install || npm ci
+          if [ -f package.json ]; then npm install; else echo "No package.json, skipping"; fi
 
       - name: Check for linting (if eslint configured)
         run: |
@@ -120,10 +121,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Build server image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: ./server
           push: false
@@ -154,7 +155,7 @@ jobs:
       - name: Check Python dependencies vulnerabilities with safety
         working-directory: server
         run: |
-          safety check --json || true
+          safety scan --output json || true
 
       - name: Run bandit security scan on Python code
         working-directory: server
