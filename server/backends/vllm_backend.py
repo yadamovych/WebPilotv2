@@ -40,13 +40,13 @@ class VLLMBackend(BaseBackend):
             model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_prompt},
+                {"role": "user", "content": user_prompt},
             ],
             temperature=0.3,
             max_tokens=2048,
         )
         usage = response.usage
-        in_tok  = usage.prompt_tokens     if usage else 0
+        in_tok = usage.prompt_tokens if usage else 0
         out_tok = usage.completion_tokens if usage else 0
         return CompletionResult(
             text=response.choices[0].message.content or "",

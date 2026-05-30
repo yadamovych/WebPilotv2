@@ -1,4 +1,5 @@
 """Pytest configuration — adds server/ to sys.path so tests can import app."""
+
 import sys
 from pathlib import Path
 

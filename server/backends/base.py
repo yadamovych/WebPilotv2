@@ -9,11 +9,12 @@ from dataclasses import dataclass, field
 @dataclass
 class CompletionResult:
     """Returned by every backend's complete() call."""
+
     text: str
     model: str
     input_tokens: int = 0
     output_tokens: int = 0
-    cost_usd: float | None = None   # None = pricing unknown for this model
+    cost_usd: float | None = None  # None = pricing unknown for this model
 
 
 class BaseBackend(ABC):

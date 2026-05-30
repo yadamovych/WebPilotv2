@@ -24,7 +24,7 @@ class AnthropicBackend(BaseBackend):
         )
         block = message.content[0]
         text = block.text if hasattr(block, "text") else ""
-        in_tok  = message.usage.input_tokens  if message.usage else 0
+        in_tok = message.usage.input_tokens if message.usage else 0
         out_tok = message.usage.output_tokens if message.usage else 0
         return CompletionResult(
             text=text,

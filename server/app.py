@@ -45,6 +45,7 @@ app.add_middleware(
 # Request / Response schemas
 # ---------------------------------------------------------------------------
 
+
 class FillTemplateRequest(BaseModel):
     userRequest: str = Field(..., description="Natural language task description from the user")
     variables: list[str] = Field(..., description="List of {{variable}} names to fill")
@@ -88,6 +89,7 @@ class PromptRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_usage(result: "CompletionResult") -> "UsageInfo":
     total = result.input_tokens + result.output_tokens
     if result.cost_usd is not None:
@@ -109,13 +111,19 @@ def _log_usage(endpoint: str, result: "CompletionResult") -> None:
     cost_str = f"${result.cost_usd:.6f}" if result.cost_usd is not None else "n/a"
     logger.info(
         "[%s] model=%s  in=%d  out=%d  total=%d  cost=%s",
-        endpoint, result.model, result.input_tokens, result.output_tokens, total, cost_str,
+        endpoint,
+        result.model,
+        result.input_tokens,
+        result.output_tokens,
+        total,
+        cost_str,
     )
 
 
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health", tags=["health"])
 async def health() -> dict:
@@ -194,6 +202,7 @@ async def prompt_endpoint(request: PromptRequest) -> PromptResponse:
 # WebSocket endpoint
 # ---------------------------------------------------------------------------
 
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     """
@@ -217,9 +226,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 try:
                     req = FillTemplateRequest(**data.get("payload", {}))
                     result = await fill_template(req)
-                    await websocket.send_json(
-                        {"type": "fill_template_result", "data": result.model_dump()}
-                    )
+                    await websocket.send_json({"type": "fill_template_result", "data": result.model_dump()})
                 except Exception as exc:
                     await websocket.send_json({"type": "error", "message": str(exc)})
 
@@ -227,9 +234,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 try:
                     req = PromptRequest(**data.get("payload", {}))
                     result = await prompt_endpoint(req)
-                    await websocket.send_json(
-                        {"type": "prompt_result", "data": result.model_dump()}
-                    )
+                    await websocket.send_json({"type": "prompt_result", "data": result.model_dump()})
                 except Exception as exc:
                     await websocket.send_json({"type": "error", "message": str(exc)})
 
@@ -243,6 +248,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 # ---------------------------------------------------------------------------
 # JSON extraction helper
 # ---------------------------------------------------------------------------
+
 
 def _extract_json(text: str) -> dict:
     """Robustly extract a JSON object from an AI response string."""
@@ -278,4 +284,5 @@ def _extract_json(text: str) -> dict:
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

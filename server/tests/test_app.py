@@ -2,6 +2,7 @@
 Tests for the WebPilot FastAPI server.
 Run: pytest server/ -v
 """
+
 from __future__ import annotations
 
 import json
@@ -13,10 +14,10 @@ from app import app, _extract_json
 from backends.base import CompletionResult
 from backends.pricing import compute_cost
 
-
 # ---------------------------------------------------------------------------
 # _extract_json unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestExtractJson:
     def test_plain_json(self):
@@ -47,6 +48,7 @@ class TestExtractJson:
 # ---------------------------------------------------------------------------
 # Pricing unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestComputeCost:
     def test_known_model(self):
