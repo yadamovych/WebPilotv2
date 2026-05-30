@@ -1,8 +1,11 @@
 name: CD
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
     branches: [main]
+    types: [completed]
+  push:
     tags:
       - "v*.*.*"
 
@@ -42,23 +45,24 @@ concurrency:
 env:
   AWS_REGION:      ${{ vars.AWS_REGION }}
   ECR_REPOSITORY:  ${{ vars.ECR_REPOSITORY }}
+  # When triggered by workflow_run, use the triggering commit SHA
+  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
   # ==========================================================================
-  # GATE: Block CD until the CI workflow on the same commit is green
+  # GATE: Abort if CI did not succeed (only relevant for workflow_run trigger)
   # ==========================================================================
   ci-gate:
     name: Wait for CI
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for CI workflow to succeed
-        uses: lewagon/wait-on-check-action@v1.3.4
-        with:
-          ref: ${{ github.sha }}
-          check-name: CI Status   # must match the job name in ci.yml
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 15
-          allowed-conclusions: success
+      - name: Fail if CI was not successful
+        if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' }}
+        run: |
+          echo "CI conclusion: ${{ github.event.workflow_run.conclusion }}"
+          exit 1
+      - name: CI passed
+        run: echo "CI passed — proceeding with CD"
 
   # ==========================================================================
   # BUILD & PUSH: Docker image → Amazon ECR
@@ -101,7 +105,7 @@ jobs:
           # Tag with both :latest and the short commit SHA for traceability
           tags: |
             ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
-            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:sha-${{ github.sha }}
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:sha-${{ env.DEPLOY_SHA }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -156,7 +160,7 @@ jobs:
           task-definition: task-definition.json
           container-name: ${{ vars.CONTAINER_NAME }}
           image: >-
-            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:sha-${{ github.sha }}
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:sha-${{ env.DEPLOY_SHA }}
 
       # Register the new revision and update the service (rolling deploy)
       - name: Deploy to ECS service
