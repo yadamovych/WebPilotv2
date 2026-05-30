@@ -151,7 +151,43 @@ header {
 .chat-input-wrap textarea {
   min-height: 70px;
 }
-
+/* ── Server status indicator ───────────────────────────────────── */
+.server-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.server-url-row input { flex: 1; min-width: 0; }
+.server-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 99px;
+  padding: 3px 8px 3px 6px;
+  cursor: default;
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #9ca3af;
+  flex-shrink: 0;
+  transition: background .2s;
+}
+.status-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+  letter-spacing: .03em;
+}
+.server-status.online  .status-dot  { background: #4caf50; box-shadow: 0 0 5px #4caf50aa; }
+.server-status.online  .status-label { color: #2e7d32; }
+.server-status.offline .status-dot  { background: #f44336; }
+.server-status.offline .status-label { color: #c62828; }
+.server-status.checking .status-dot { background: #9ca3af; animation: pulse-dot .9s ease-in-out infinite; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
 /* ── Settings: more generous ────────────────────────────────────────────── */
 .form-group { margin-bottom: 18px; }
 
