@@ -33,7 +33,7 @@ infra/              Terraform — AWS infrastructure as code
   ecr.tf            ECR repository + lifecycle policy
   iam.tf            EC2 role, ECS task execution role, GitHub OIDC role
   ssm.tf            SSM SecureString parameters for API keys
-  ecs.tf            ECS cluster, t2.micro launch template, task def, service
+  ecs.tf            ECS cluster, t3.micro launch template, task def, service
   outputs.tf        Values to copy into GitHub Actions variables
 
 .github/workflows/
@@ -229,7 +229,7 @@ All AWS resources are defined in `infra/` using Terraform. The setup uses:
 
 | Resource | Free tier |  |
 |---|---|---|
-| EC2 t2.micro | 750 h/month (12 months) | ECS container host |
+| EC2 t3.micro | 750 h/month (12 months) | ECS container host |
 | ECR | 500 MB/month | Docker image registry |
 | SSM Parameter Store (standard) | Free | API key storage |
 | CloudWatch Logs | 5 GB/month | Container logs |
@@ -320,3 +320,81 @@ After running `terraform apply`, copy the outputs into your repository
 | `AWS_ROLE_TO_ASSUME` | `terraform output github_actions_role_arn` |
 
 The CD workflow authenticates to AWS using **OIDC** (no long-lived access keys stored in GitHub).
+
+---
+
+## Production deployment
+
+### Live endpoints
+
+| URL | Description |
+|---|---|
+| `http://ec2-13-60-34-130.eu-north-1.compute.amazonaws.com:8000/health` | Health check |
+| `http://ec2-13-60-34-130.eu-north-1.compute.amazonaws.com:8000/api/fill-template` | Fill template |
+| `http://ec2-13-60-34-130.eu-north-1.compute.amazonaws.com:8000/ws` | WebSocket |
+
+> **Note:** The AWS EC2 DNS name changes if the instance is stopped and restarted. Use an Elastic IP or DuckDNS subdomain for a permanent address (see below).
+
+### Stable DNS options (free)
+
+**Option A — DuckDNS** (`webpilot.duckdns.org`)
+1. Go to [duckdns.org](https://www.duckdns.org) → log in with GitHub
+2. Create subdomain and point it to the EC2 public IP
+3. To auto-update on instance restart, add to EC2 user_data in `infra/ecs.tf`:
+```bash
+curl -s "https://www.duckdns.org/update?domains=webpilot&token=<YOUR_TOKEN>&ip=" > /dev/null
+```
+
+**Option B — Elastic IP** (same IP survives restarts, free while attached)
+```bash
+EIP=$(aws ec2 allocate-address --domain vpc --profile webpilot --query AllocationId --output text)
+INSTANCE_ID=$(aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=webpilot-ecs-host" "Name=instance-state-name,Values=running" \
+  --profile webpilot --query "Reservations[0].Instances[0].InstanceId" --output text)
+aws ec2 associate-address --instance-id $INSTANCE_ID --allocation-id $EIP --profile webpilot
+```
+
+### Useful ops commands
+
+```bash
+# Check ECS service health
+aws ecs describe-services \
+  --cluster webpilot-cluster --services webpilot-service \
+  --profile webpilot \
+  --query "services[0].{running:runningCount,desired:desiredCount,status:status}"
+
+# Tail live container logs
+aws logs tail /ecs/webpilot --follow --profile webpilot
+
+# Last 1 hour of logs
+aws logs tail /ecs/webpilot --since 1h --profile webpilot
+
+# Filter errors only
+aws logs filter-log-events \
+  --log-group-name /ecs/webpilot \
+  --filter-pattern "ERROR" \
+  --profile webpilot \
+  --query "events[].message" --output text
+
+# Force a new deployment (e.g. after manual ECR push)
+aws ecs update-service \
+  --cluster webpilot-cluster \
+  --service webpilot-service \
+  --force-new-deployment \
+  --profile webpilot
+
+# Get EC2 public IP
+aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=webpilot-ecs-host" "Name=instance-state-name,Values=running" \
+  --profile webpilot \
+  --query "Reservations[0].Instances[0].PublicIpAddress" --output text
+
+# Manual first image push (before CD pipeline has run)
+aws ecr get-login-password --region eu-north-1 --profile webpilot \
+  | docker login --username AWS --password-stdin \
+    637423363284.dkr.ecr.eu-north-1.amazonaws.com
+docker build -t webpilot-server ./server
+docker tag webpilot-server:latest \
+  637423363284.dkr.ecr.eu-north-1.amazonaws.com/webpilot-server:latest
+docker push 637423363284.dkr.ecr.eu-north-1.amazonaws.com/webpilot-server:latest
+```
