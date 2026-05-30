@@ -55,8 +55,14 @@ function resolveDOM() {
     toggleKey:       document.getElementById('toggle-key'),
     modelName:       document.getElementById('model-name'),
     btnSaveSettings: document.getElementById('btn-save-settings'),
+    btnCheckServer:  document.getElementById('btn-check-server'),
     settingsStatus:  document.getElementById('settings-status'),
     devMode:         document.getElementById('dev-mode'),
+
+    // Header status indicator
+    serverStatus:    document.getElementById('server-status'),
+    statusDot:       document.querySelector('#server-status .status-dot'),
+    statusLabel:     document.querySelector('#server-status .status-label'),
   };
 }
 
@@ -69,6 +75,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await Promise.all([loadSettings(), loadTemplates(), syncRecordingState()]);
   renderSteps();
   renderTemplates();
+  checkServerHealth();
 });
 
 // ---------------------------------------------------------------------------
@@ -99,6 +106,7 @@ function bindStaticEvents() {
     dom.apiKey.type = dom.apiKey.type === 'password' ? 'text' : 'password';
   });
   dom.btnSaveSettings.addEventListener('click', saveSettings);
+  dom.btnCheckServer.addEventListener('click', () => checkServerHealth(true));
 
   // Background → popup messages (e.g. live step updates while popup is open)
   chrome.runtime.onMessage.addListener(onBackgroundMessage);
@@ -142,8 +150,39 @@ async function saveSettings() {
   if (res?.success) {
     state.devMode = config.devMode;
     renderTemplates();
+    checkServerHealth();
   }
   showStatus(dom.settingsStatus, res?.success ? 'Settings saved.' : 'Save failed.', !!res?.success);
+}
+
+// ---------------------------------------------------------------------------
+// Server health check
+// ---------------------------------------------------------------------------
+async function checkServerHealth(showResult = false) {
+  const url = (dom.serverUrl?.value || 'http://localhost:8000').replace(/\/$/, '');
+
+  dom.serverStatus.className = 'server-status checking';
+  dom.statusLabel.textContent = '…';
+
+  try {
+    const resp = await fetch(`${url}/health`, { signal: AbortSignal.timeout(4000) });
+    const ok = resp.ok;
+    dom.serverStatus.className = `server-status ${ok ? 'online' : 'offline'}`;
+    dom.statusLabel.textContent = ok ? 'Online' : `${resp.status}`;
+    if (showResult) {
+      showStatus(
+        dom.settingsStatus,
+        ok ? `Server online (${url})` : `Server returned ${resp.status}`,
+        ok
+      );
+    }
+  } catch {
+    dom.serverStatus.className = 'server-status offline';
+    dom.statusLabel.textContent = 'Offline';
+    if (showResult) {
+      showStatus(dom.settingsStatus, `Cannot reach server at ${url}`, false);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

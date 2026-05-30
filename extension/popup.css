@@ -84,6 +84,44 @@ header {
   margin-top: 1px;
 }
 
+/* ── Server status indicator ───────────────────────────────────────────── */
+.server-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  background: rgba(255,255,255,.15);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px 2px 6px;
+  cursor: default;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.4);
+  flex-shrink: 0;
+  transition: background var(--transition);
+}
+
+.status-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255,255,255,.9);
+  letter-spacing: .03em;
+}
+
+.server-status.online  .status-dot { background: #4caf50; box-shadow: 0 0 5px #4caf50aa; }
+.server-status.offline .status-dot { background: #f44336; }
+.server-status.checking .status-dot { background: rgba(255,255,255,.4); animation: pulse-dot .9s ease-in-out infinite; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .3; }
+}
+
+
 /* ── Tab bar ───────────────────────────────────────────────────────────── */
 .tabs {
   display: flex;
