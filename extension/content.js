@@ -820,8 +820,8 @@
 
         if (el.isContentEditable) {
           // contenteditable (e.g. Jira rich-text editor, ProseMirror, Quill)
-          // Strip markdown syntax — rich text editors show it literally rather than rendering it.
-          const plainValue = stripMarkdown(value ?? '');
+          // Accept HTML for formatting (from AI output) — Jira will render <b>, <ul>, <a>, etc.
+          const htmlValue = value ?? '';
           // Select all existing content and replace with typed value
           const selection = window.getSelection();
           const range = document.createRange();
@@ -829,11 +829,11 @@
           selection.removeAllRanges();
           selection.addRange(range);
           // Use execCommand for broad framework compatibility
-          document.execCommand('insertText', false, plainValue);
-          // Fallback: set textContent if execCommand had no effect
-          if (el.textContent !== plainValue) {
-            el.textContent = plainValue;
-            el.dispatchEvent(new InputEvent('input', { bubbles: true, data: plainValue }));
+          document.execCommand('insertHTML', false, htmlValue);
+          // Fallback: set innerHTML if execCommand had no effect
+          if (el.innerHTML !== htmlValue) {
+            el.innerHTML = htmlValue;
+            el.dispatchEvent(new InputEvent('input', { bubbles: true, data: htmlValue }));
           }
         } else {
           // Regular <input> / <textarea>

@@ -150,15 +150,15 @@ async def fill_template(request: FillTemplateRequest) -> FillTemplateResponse:
         "Given a user request and a list of template variable names, generate appropriate "
         "string values for each variable that would fulfill the user's intent.\n"
         "Return ONLY a valid JSON object — no prose, no markdown fences.\n\n"
-        "IMPORTANT: All values must be plain text only. "
-        "Do NOT use any markdown formatting: no **bold**, no *italic*, no # headings, "
-        "no - or * bullet lists, no `code`, no > blockquotes, no --- dividers.\n"
-        "Use plain sentences and newlines for structure if needed.\n\n"
+        "IMPORTANT: For any variable that will be inserted into a rich text editor (like Jira), output HTML for formatting. "
+        "Use <b>bold</b>, <i>italic</i>, <ul><li>lists</li></ul>, <a href>links</a>, and <br> for newlines. "
+        "Do NOT use markdown, code fences, or blockquotes.\n"
+        "If unsure, use plain text.\n\n"
         "Example:\n"
         'User request: "Create Jira ticket for PR-Agent deployment"\n'
         'Variables: ["title", "description"]\n'
         'Response: {"title": "Deploy PR-Agent to Production", '
-        '"description": "Track the end-to-end deployment of PR-Agent: build, push, and rollout."}'
+        '"description": "<b>Track the end-to-end deployment of PR-Agent:</b><ul><li>build</li><li>push</li><li>rollout</li></ul>"}'
     )
 
     parts = [
