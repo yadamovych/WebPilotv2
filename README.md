@@ -1,3 +1,8 @@
+# WebPilot
+
+Browser automation powered by AI — record workflows once, replay them with natural language.
+
+---
 
 ## Getting Started: Installing and Using WebPilot
 
@@ -45,10 +50,6 @@
   `http://webpilot.duckdns.org:8000`
 
 ---
-
-# WebPilot
-
-Browser automation powered by AI — record workflows once, replay them with natural language.
 
 ## Architecture
 
