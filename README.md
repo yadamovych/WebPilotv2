@@ -1,3 +1,51 @@
+
+## Getting Started: Installing and Using WebPilot
+
+### 1. Download and Install the Extension
+
+1. Download the latest release of the extension as a ZIP file (or clone the repo).
+2. Unzip the archive. You should see a folder named `extension/` with files like `manifest.json`, `popup.html`, etc.
+3. Open Chrome or Edge and go to `chrome://extensions` (or `edge://extensions`).
+4. Enable **Developer mode** (toggle in the top right).
+5. Click **Load unpacked** and select the `extension/` folder.
+6. The WebPilot icon will appear in your browser toolbar.
+
+### 2. Configure the Extension
+
+1. Click the WebPilot icon to open the popup.
+2. Go to the **Settings** tab.
+3. Set the **Server URL** to your production server:  
+   `http://webpilot.duckdns.org:8000`
+4. Choose your **AI Backend** (e.g., Groq, OpenAI, Anthropic, or Local vLLM).
+5. Enter your **API Key** if required (for OpenAI, Groq, or Anthropic).
+6. (Optional) Set a model name or enable Dev Mode.
+7. Click **Save Settings**.
+
+### 3. Using WebPilot
+
+- **Record a workflow:**  
+  1. Open the page you want to automate.
+  2. Click the WebPilot icon → **Record** tab → **Start Recording**.
+  3. Perform your actions (clicks, typing, etc.).
+  4. Click **Stop Recording**. Edit steps if needed.
+  5. Name and **Save** the workflow as a template.
+
+- **Run a workflow:**  
+  1. Go to the **Templates** tab.
+  2. Click **Play** on a saved template.
+  3. Enter your prompt (e.g., “Create Jira ticket for PR-Agent deployment”).
+  4. Click **Execute with AI**.
+  5. WebPilot will fill variables and run the steps automatically.
+
+### 4. Troubleshooting
+
+- If the server status shows **Offline**, check your Server URL and network.
+- Make sure your API keys are valid and the backend is running.
+- For production, use the stable URL:  
+  `http://webpilot.duckdns.org:8000`
+
+---
+
 # WebPilot
 
 Browser automation powered by AI — record workflows once, replay them with natural language.
