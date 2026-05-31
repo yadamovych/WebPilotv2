@@ -42,6 +42,7 @@ function resolveDOM() {
     btnCancelPlay:   document.getElementById('btn-cancel-play'),
     userRequest:     document.getElementById('user-request'),
     btnExecute:      document.getElementById('btn-execute'),
+    btnStop:         document.getElementById('btn-stop'),
     executeLabel:    document.getElementById('execute-label'),
     playStatus:      document.getElementById('play-status'),
     templatesList:   document.getElementById('templates-list'),
@@ -82,6 +83,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Event bindings
 // ---------------------------------------------------------------------------
 function bindStaticEvents() {
+    dom.btnStop?.addEventListener('click', stopPlayback);
   // Tab switching
   dom.tabBtns.forEach((btn) =>
     btn.addEventListener('click', () => switchTab(btn.dataset.tab))
@@ -106,7 +108,13 @@ function bindStaticEvents() {
     dom.apiKey.type = dom.apiKey.type === 'password' ? 'text' : 'password';
   });
   dom.btnSaveSettings.addEventListener('click', saveSettings);
+
   dom.btnCheckServer?.addEventListener('click', () => checkServerHealth(true));
+  // Allow clicking the status indicator itself to refresh health
+  dom.serverStatus?.addEventListener('click', (e) => {
+    e.preventDefault();
+    checkServerHealth(true);
+  });
 
   // Background → popup messages (e.g. live step updates while popup is open)
   chrome.runtime.onMessage.addListener(onBackgroundMessage);
@@ -709,6 +717,7 @@ async function executeTemplate() {
   if (!userRequest) { dom.userRequest.focus(); return; }
 
   dom.btnExecute.disabled = true;
+  if (dom.btnStop) dom.btnStop.classList.remove('hidden');
   dom.executeLabel.textContent = 'Running…';
   setStatus(dom.playStatus, 'Asking AI to fill variables…', '');
 
@@ -734,8 +743,19 @@ async function executeTemplate() {
     setStatus(dom.playStatus, `✗ ${err.message}`, 'error');
   } finally {
     dom.btnExecute.disabled = false;
+    if (dom.btnStop) dom.btnStop.classList.add('hidden');
     dom.executeLabel.textContent = '▶ Execute with AI';
   }
+
+}
+
+async function stopPlayback() {
+  if (dom.btnStop) dom.btnStop.disabled = true;
+  setStatus(dom.playStatus, 'Stopping…', '');
+  await sendMsg({ type: 'STOP_PLAYBACK' });
+  if (dom.btnStop) dom.btnStop.classList.add('hidden');
+  dom.btnExecute.disabled = false;
+  dom.executeLabel.textContent = '▶ Execute with AI';
 }
 
 async function deleteTemplate(id) {

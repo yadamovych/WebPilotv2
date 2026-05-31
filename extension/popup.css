@@ -1,3 +1,22 @@
+/* Play panel actions row */
+.play-actions-row {
+  display: flex;
+  gap: 8px;
+}
+.btn-stop {
+  min-width: 0;
+  flex: 1;
+  background: #fff3f3;
+  color: #c62828;
+  border: 1.5px solid #ffcdd2;
+  font-weight: 600;
+  transition: background .18s, border-color .18s, color .18s;
+}
+.btn-stop:hover:not(:disabled) {
+  background: #ffcdd2;
+  color: #b71c1c;
+  border-color: #e57373;
+}
 /* ── Design tokens — Copilot × browser.ai ─────────────────────────────── */
 :root {
   --primary:          #0067b8;
