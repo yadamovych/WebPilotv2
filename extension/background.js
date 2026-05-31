@@ -258,19 +258,49 @@ async function handlePlayTemplate(templateId, userRequest, tabId) {
       tabId = tab.id;
     }
 
-    // Ensure content script is present before playback starts
-    await ensureContentScript(tabId);
-
-    // Ask the AI server to fill template variables
+    // Ask the AI server to fill template variables (before navigation so we don't
+    // lose the current context)
     const variables = await fillTemplateVariables(template, userRequest);
-
-    // Substitute {{variable}} placeholders in step values
     const resolvedSteps = substituteVariables(template.steps, variables);
 
-    STATE.playback = { active: true, tabId, currentIndex: 0 };
+    // If the current tab is a restricted page (edge://, chrome://, about:, …),
+    // we can't inject a content script into it.  However, if the first step is a
+    // navigate action we can just redirect the tab to that URL right now and let
+    // the normal post-navigate logic take over.
+    const currentTab = await chrome.tabs.get(tabId).catch(() => null);
+    const currentUrl = currentTab?.url ?? '';
+    const isRestricted =
+      currentUrl.startsWith('chrome://') ||
+      currentUrl.startsWith('chrome-extension://') ||
+      currentUrl.startsWith('edge://') ||
+      currentUrl.startsWith('about:') ||
+      currentUrl.startsWith('data:');
+
+    let startIndex = 0;
+
+    if (isRestricted) {
+      const firstNav = resolvedSteps.findIndex(s => s.action === 'navigate');
+      if (firstNav === -1) {
+        throw new Error(
+          `WebPilot cannot run on this page (${currentUrl.split('://')[0]}:// pages are restricted). ` +
+          `Open a webpage first, then run the workflow.`
+        );
+      }
+      // Navigate the current tab to the target URL directly
+      await chrome.tabs.update(tabId, { url: resolvedSteps[firstNav].value });
+      await waitForTabLoad(tabId);
+      await ensureContentScript(tabId);
+      await delay(300);
+      startIndex = firstNav + 1; // first navigate step already done
+    } else {
+      // Ensure content script is present before playback starts
+      await ensureContentScript(tabId);
+    }
+
+    STATE.playback = { active: true, tabId, currentIndex: startIndex };
 
     const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
-    await executeSteps(tabId, resolvedSteps, !!serverConfig.devMode);
+    await executeSteps(tabId, resolvedSteps, !!serverConfig.devMode, startIndex);
 
     STATE.playback.active = false;
     return { success: true, variables };
@@ -280,8 +310,8 @@ async function handlePlayTemplate(templateId, userRequest, tabId) {
   }
 }
 
-async function executeSteps(tabId, steps, devMode = false) {
-  for (let i = 0; i < steps.length; i++) {
+async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
+  for (let i = startIndex; i < steps.length; i++) {
     if (!STATE.playback.active) break;
 
     STATE.playback.currentIndex = i;
