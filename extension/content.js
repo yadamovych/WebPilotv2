@@ -28,6 +28,27 @@
   const inputTimers = new Map();
 
   // ---------------------------------------------------------------------------
+  // Utility: strip Markdown syntax so rich-text editors (Jira, Confluence, etc.)
+  // receive plain text instead of literal **bold** / ## heading characters.
+  // ---------------------------------------------------------------------------
+  function stripMarkdown(text) {
+    return text
+      .replace(/^#{1,6}\s+/gm, '')            // ## headings
+      .replace(/(\*\*|__)(.*?)\1/g, '$2')      // **bold** / __bold__
+      .replace(/(\*|_)(.*?)\1/g, '$2')         // *italic* / _italic_
+      .replace(/~~(.*?)~~/g, '$1')             // ~~strikethrough~~
+      .replace(/`{1,3}[^`]*`{1,3}/g, (m) =>   // `code` / ```block```
+        m.replace(/`/g, '').trim())
+      .replace(/^\s*[-*+]\s+/gm, '')           // - / * / + unordered list bullets
+      .replace(/^\s*\d+\.\s+/gm, '')           // 1. ordered list
+      .replace(/^\s*>\s*/gm, '')               // > blockquote
+      .replace(/^-{3,}$/gm, '')               // --- horizontal rules
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [link text](url) → link text
+      .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1') // ![alt](url) → alt
+      .trim();
+  }
+
+  // ---------------------------------------------------------------------------
   // Message listener (from background)
   // ---------------------------------------------------------------------------
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -799,6 +820,8 @@
 
         if (el.isContentEditable) {
           // contenteditable (e.g. Jira rich-text editor, ProseMirror, Quill)
+          // Strip markdown syntax — rich text editors show it literally rather than rendering it.
+          const plainValue = stripMarkdown(value ?? '');
           // Select all existing content and replace with typed value
           const selection = window.getSelection();
           const range = document.createRange();
@@ -806,11 +829,11 @@
           selection.removeAllRanges();
           selection.addRange(range);
           // Use execCommand for broad framework compatibility
-          document.execCommand('insertText', false, value ?? '');
+          document.execCommand('insertText', false, plainValue);
           // Fallback: set textContent if execCommand had no effect
-          if (el.textContent !== (value ?? '')) {
-            el.textContent = value ?? '';
-            el.dispatchEvent(new InputEvent('input', { bubbles: true, data: value ?? '' }));
+          if (el.textContent !== plainValue) {
+            el.textContent = plainValue;
+            el.dispatchEvent(new InputEvent('input', { bubbles: true, data: plainValue }));
           }
         } else {
           // Regular <input> / <textarea>
