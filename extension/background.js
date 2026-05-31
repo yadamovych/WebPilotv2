@@ -125,9 +125,14 @@ async function handleStartRecording(tabId) {
     STATE.recordingTabId = tabId;
     // Do NOT clear steps here — user may be adding more steps to an existing session
 
-    // Prepend a navigate step on a fresh recording so playback always starts
-    // by navigating to the correct page, regardless of what tab is active.
-    if (STATE.steps.length === 0 && tab?.url && !tab.url.startsWith('chrome')) {
+    // Only add navigate step if this is the very first start of a new session
+    // (not after clear, not after stop/start, not after resume)
+    if (
+      STATE.steps.length === 0 &&
+      tab?.url &&
+      !tab.url.startsWith('chrome') &&
+      !STATE.recording // only if not already recording
+    ) {
       const url = tab.url;
       const label = `Navigate to ${url}`;
       STATE.steps.push({
@@ -137,7 +142,7 @@ async function handleStartRecording(tabId) {
         description: label,
         id: crypto.randomUUID(),
         timestamp: Date.now(),
-        auto: true,  // mark as auto-inserted so UI can style it differently
+        auto: true,
       });
       chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
     }
