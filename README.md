@@ -329,11 +329,11 @@ The CD workflow authenticates to AWS using **OIDC** (no long-lived access keys s
 
 | URL | Description |
 |---|---|
-| `http://ec2-13-60-34-130.eu-north-1.compute.amazonaws.com:8000/health` | Health check |
-| `http://ec2-13-60-34-130.eu-north-1.compute.amazonaws.com:8000/api/fill-template` | Fill template |
-| `http://ec2-13-60-34-130.eu-north-1.compute.amazonaws.com:8000/ws` | WebSocket |
+| `http://webpilot.duckdns.org:8000/health` | Health check |
+| `http://webpilot.duckdns.org:8000/api/fill-template` | Fill template |
+| `http://webpilot.duckdns.org:8000/ws` | WebSocket |
 
-> **Note:** The AWS EC2 DNS name changes if the instance is stopped and restarted. Use an Elastic IP or DuckDNS subdomain for a permanent address (see below).
+> **Note:** DNS auto-updates on instance restart via DuckDNS (configured in EC2 user_data). If the domain stops resolving, get the current IP with the command below and update DuckDNS manually.
 
 ### Stable DNS options (free)
 
