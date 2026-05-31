@@ -832,6 +832,7 @@ function buildStepItem(step, index) {
   const alreadyVar = isType && step.value?.startsWith('{{');
   const isDate = step.fieldType === 'date';
   const hint = step.elementHint ?? step.selector ?? '';
+  const isAutoNav = step.auto === true;
 
   li.innerHTML = `
     <span class="step-drag-handle" title="Drag to reorder">
@@ -840,6 +841,7 @@ function buildStepItem(step, index) {
     <div class="step-num">${index + 1}</div>
     <div class="step-info">
       <span class="step-action step-action-${esc(step.action ?? 'action')} ${isDate ? 'step-action-date' : ''}">${esc(step.action)}</span>
+      ${isAutoNav ? '<span class="step-auto-badge" title="Auto-recorded start URL">auto</span>' : ''}
       ${isDate ? '<span class="step-field-badge date-badge" title="Calendar / date field">📅</span>' : ''}
       ${isSelect && step.value ? `<span class="step-select-badge">▾ ${esc(step.value)}</span>` : ''}
       <div class="step-desc" title="${esc(step.description ?? step.selector ?? '')}">${esc(step.description ?? step.selector ?? '')}</div>

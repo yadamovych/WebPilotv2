@@ -109,9 +109,12 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 // ---------------------------------------------------------------------------
 async function handleStartRecording(tabId) {
   try {
+    let tab;
     if (!tabId) {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       tabId = tab.id;
+    } else {
+      tab = await chrome.tabs.get(tabId);
     }
 
     // Ensure content script is alive — inject it if this is a freshly-opened
@@ -121,6 +124,23 @@ async function handleStartRecording(tabId) {
     STATE.recording = true;
     STATE.recordingTabId = tabId;
     // Do NOT clear steps here — user may be adding more steps to an existing session
+
+    // Prepend a navigate step on a fresh recording so playback always starts
+    // by navigating to the correct page, regardless of what tab is active.
+    if (STATE.steps.length === 0 && tab?.url && !tab.url.startsWith('chrome')) {
+      const url = tab.url;
+      const label = `Navigate to ${url}`;
+      STATE.steps.push({
+        action: 'navigate',
+        value: url,
+        label,
+        description: label,
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        auto: true,  // mark as auto-inserted so UI can style it differently
+      });
+      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
+    }
 
     await broadcastToFrames(tabId, { type: 'START_RECORDING' });
     return { success: true, tabId };
