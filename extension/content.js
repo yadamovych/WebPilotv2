@@ -17,6 +17,14 @@
   if (window.__webpilotLoaded) return;
   window.__webpilotLoaded = true;
 
+  // If recording was already active when this frame loaded (e.g. a TinyMCE
+  // iframe that opened after broadcastToFrames was already called), join the
+  // session immediately so input events are captured.
+  chrome.runtime.sendMessage({ type: 'GET_STATE' }, (res) => {
+    if (chrome.runtime.lastError) return; // background not ready yet
+    if (res?.state?.recording) startRecording();
+  });
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
@@ -264,6 +272,12 @@
       return ['text', 'email', 'password', 'search', 'tel', 'url',
               'number', 'date', 'datetime-local', 'time', 'month', 'week'].includes(t);
     }
+    // Container divs that wrap a rich-text editor (e.g. Jira's div.jira-wikifield):
+    // clicking them should not produce a 'click' step — the inner editor will capture typing.
+    if (tag === 'DIV' || tag === 'SPAN' || tag === 'SECTION' || tag === 'ARTICLE') {
+      if (el.querySelector?.('[contenteditable="true"]')) return true;
+      if (el.querySelector?.('textarea')) return true;
+    }
     return false;
   }
 
@@ -316,6 +330,72 @@
         }
       }, 100);
       return;
+    }
+
+    // Detect a click on a dropdown option (Jira/AUI combobox, custom selects).
+    // Covers both ARIA-standard [role="listbox"] containers and Atlassian AUI
+    // .aui-list containers which do NOT use role="listbox".
+    const optionEl =
+      el.closest?.('[role="option"]') ||
+      el.closest?.('.aui-list-item')  ||
+      (el.tagName === 'A' && el.closest?.('[class*="aui-list"]') ? el : null);
+    if (optionEl) {
+      // Accept any recognisable dropdown container
+      const dropdown =
+        optionEl.closest?.('[role="listbox"]') ||
+        optionEl.closest?.('[class*="aui-list"]') ||
+        optionEl.closest?.('[class*="dropdown"]') ||
+        optionEl.closest?.('[class*="suggestions"]') ||
+        optionEl.closest?.('[data-role="listbox"]');
+      if (dropdown) {
+        // Try to find the trigger/combobox that opened this dropdown
+        let triggerEl = null;
+        const dropdownId = dropdown.id;
+        if (dropdownId) {
+          triggerEl =
+            document.querySelector(`[aria-controls="${dropdownId}"]`) ||
+            document.querySelector(`[aria-owns="${dropdownId}"]`);
+        }
+        // Also try: look for the nearest preceding combobox/input sibling
+        if (!triggerEl) {
+          const parent = dropdown.parentElement;
+          if (parent) {
+            triggerEl =
+              parent.querySelector('input[role="combobox"]') ||
+              parent.querySelector('input[aria-autocomplete]') ||
+              parent.querySelector('input[aria-haspopup]');
+          }
+        }
+        const targetEl = triggerEl || dropdown;
+        const sel = buildSelector(targetEl);
+        // Get the option text — prefer the element's own trimmed text,
+        // but for AUI list-items the anchor child holds the visible text.
+        const optionText =
+          (optionEl.tagName === 'A' ? optionEl : optionEl.querySelector('a'))?.textContent?.trim() ||
+          optionEl.textContent?.trim() ||
+          '';
+        // Cancel any pending debounced type step for this combobox so we don't
+        // get both a 'type' step (from user filtering) and a 'select' step.
+        const existingTimer = inputTimers.get(sel);
+        if (existingTimer) {
+          clearTimeout(existingTimer.tid);
+          inputTimers.delete(sel);
+        }
+        const lbl = getLabel(targetEl) || labelFromSelector(sel);
+        flashRecorded(optionEl);
+        chrome.runtime.sendMessage({
+          type: 'RECORD_ACTION',
+          action: {
+            action: 'select',
+            selector: sel,
+            value: optionText,
+            label: lbl,
+            description: `Select "${optionText}" in ${lbl}`,
+            elementHint: elementHint(targetEl),
+          },
+        });
+        return;
+      }
     }
 
     flashRecorded(el);
@@ -421,6 +501,24 @@
       return;
     }
 
+    // Jira/Atlassian and other modern UIs often use combobox widgets instead of
+    // native <select>. Record these as 'select' too so variable substitution can
+    // target them just like normal dropdowns.
+    if (isComboBoxInput(el)) {
+      const selector = buildSelector(el);
+      if (inputTimers.has(selector)) {
+        clearTimeout(inputTimers.get(selector).tid);
+        inputTimers.delete(selector);
+      }
+      const value = (el.value ?? el.textContent ?? '').trim();
+      const label = getLabel(el) || labelFromSelector(selector);
+      chrome.runtime.sendMessage({
+        type: 'RECORD_ACTION',
+        action: { action: 'select', selector, value, label, description: label, elementHint: elementHint(el) },
+      });
+      return;
+    }
+
     // Native date/time inputs fire 'change' when the user picks from the browser date picker
     if (isDateField(el)) {
       const selector = buildSelector(el);
@@ -438,6 +536,16 @@
     if (!el || el.tagName !== 'INPUT') return false;
     const t = (el.type || '').toLowerCase();
     return ['date', 'datetime-local', 'time', 'month', 'week'].includes(t);
+  }
+
+  function isComboBoxInput(el) {
+    if (!el) return false;
+    const role = (el.getAttribute?.('role') || '').toLowerCase();
+    const ariaAutocomplete = (el.getAttribute?.('aria-autocomplete') || '').toLowerCase();
+    const hasListboxPopup = (el.getAttribute?.('aria-haspopup') || '').toLowerCase() === 'listbox';
+    const tag = el.tagName;
+    const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+    return role === 'combobox' || (isEditable && (ariaAutocomplete === 'list' || hasListboxPopup));
   }
 
   /**
@@ -515,16 +623,60 @@
   // ---------------------------------------------------------------------------
   // CSS selector builder
   // ---------------------------------------------------------------------------
-  function buildSelector(el) {
-    if (!el || el === document.body) return 'body';
+  /**
+   * Walk up from a contenteditable / textarea / input element looking for the
+   * nearest ancestor that has a stable, unique identifier (id, data-field-id,
+   * data-testid, aria-label, aria-labelledby).  Returns null if none found
+   * within 6 levels.
+   */
+  function findStableFieldAncestor(el) {
+    let node = el.parentElement;
+    for (let i = 0; i < 6 && node && node !== document.body; i++, node = node.parentElement) {
+      if (node.id && /^[a-zA-Z][\w-]*$/.test(node.id)) return node;
+      if (node.dataset?.fieldId) return node;
+      if (node.dataset?.testid) return node;
+      if (node.dataset?.cy) return node;
+      if (node.getAttribute('aria-label')) return node;
+      if (node.getAttribute('aria-labelledby')) return node;
+    }
+    return null;
+  }
 
-    // Stable attribute priority list
+  function buildSelector(el) {
+    if (!el) return 'body';
+
+    // Stable id check FIRST — even document.body can have a meaningful id.
+    // e.g. TinyMCE renders <body id="tinymce" contenteditable="true"> inside
+    // an iframe; we must return '#tinymce' rather than 'body' in that case.
     if (el.id && /^[a-zA-Z][\w-]*$/.test(el.id)) return `#${el.id}`;
+
+    if (el === document.body) return 'body';
     if (el.dataset?.testid) return `[data-testid="${CSS.escape(el.dataset.testid)}"]`;
     if (el.dataset?.cy) return `[data-cy="${CSS.escape(el.dataset.cy)}"]`;
+    if (el.dataset?.fieldId) return `[data-field-id="${CSS.escape(el.dataset.fieldId)}"]`;
     if (el.name) return `${el.tagName.toLowerCase()}[name="${CSS.escape(el.name)}"]`;
     const ariaLabel = el.getAttribute('aria-label');
     if (ariaLabel) return `[aria-label="${CSS.escape(ariaLabel)}"]`;
+
+    // For editable elements with no own stable identifier, try anchoring on a
+    // stable ancestor (e.g. the wrapping div.jira-wikifield with an id or
+    // data-field-id).  This avoids fragile nth-child paths for rich editors.
+    const isEditable = el.isContentEditable ||
+      el.tagName === 'TEXTAREA' ||
+      (el.tagName === 'INPUT' && el.type !== 'hidden');
+    if (isEditable) {
+      const anchor = findStableFieldAncestor(el);
+      if (anchor) {
+        // Build the anchor's selector (will hit one of the stable checks above)
+        const anchorSel = buildSelector(anchor);
+        // If there is exactly one matching typeable descendant use a qualified
+        // selector; otherwise the anchor alone is enough (playback will find
+        // the first editable child).
+        const qualified = `${anchorSel} ${el.tagName.toLowerCase()}`;
+        if (document.querySelectorAll(qualified).length === 1) return qualified;
+        return anchorSel;
+      }
+    }
 
     // Walk up and build a short CSS path
     const path = [];
@@ -815,25 +967,37 @@
       }
 
       case 'type': {
-        el.focus();
+        // If the selector resolved to a container (not directly editable),
+        // look for the actual editable descendant inside it.
+        // This handles wrappers like div.jira-wikifield that contain a
+        // contenteditable or textarea child.
+        let typeEl = el;
+        if (!el.isContentEditable && el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') {
+          typeEl = el.querySelector('[contenteditable="true"]') ??
+                   el.querySelector('textarea') ??
+                   el.querySelector('input:not([type="hidden"])') ??
+                   el;
+        }
+
+        typeEl.focus();
         await delay(50);
 
-        if (el.isContentEditable) {
+        if (typeEl.isContentEditable) {
           // contenteditable (e.g. Jira rich-text editor, ProseMirror, Quill)
           // Accept HTML for formatting (from AI output) — Jira will render <b>, <ul>, <a>, etc.
           const htmlValue = value ?? '';
           // Select all existing content and replace with typed value
           const selection = window.getSelection();
           const range = document.createRange();
-          range.selectNodeContents(el);
+          range.selectNodeContents(typeEl);
           selection.removeAllRanges();
           selection.addRange(range);
           // Use execCommand for broad framework compatibility
           document.execCommand('insertHTML', false, htmlValue);
           // Fallback: set innerHTML if execCommand had no effect
-          if (el.innerHTML !== htmlValue) {
-            el.innerHTML = htmlValue;
-            el.dispatchEvent(new InputEvent('input', { bubbles: true, data: htmlValue }));
+          if (typeEl.innerHTML !== htmlValue) {
+            typeEl.innerHTML = htmlValue;
+            typeEl.dispatchEvent(new InputEvent('input', { bubbles: true, data: htmlValue }));
           }
         } else {
           // Regular <input> / <textarea>
@@ -841,31 +1005,38 @@
           // the type to 'text' so the browser accepts any string value without
           // logging a validation warning or silently clearing the field.
           const CONSTRAINED = ['number','date','datetime-local','time','month','week','range','color'];
-          const savedType = (el instanceof HTMLInputElement && CONSTRAINED.includes(el.type.toLowerCase()))
-            ? el.type : null;
-          if (savedType) { try { el.type = 'text'; } catch (_) {} }
+          const savedType = (typeEl instanceof HTMLInputElement && CONSTRAINED.includes(typeEl.type.toLowerCase()))
+            ? typeEl.type : null;
+          if (savedType) { try { typeEl.type = 'text'; } catch (_) {} }
 
           const nativeSetter =
             Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
             Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-          if (nativeSetter && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) {
-            nativeSetter.call(el, value ?? '');
+          if (nativeSetter && (typeEl instanceof HTMLInputElement || typeEl instanceof HTMLTextAreaElement)) {
+            nativeSetter.call(typeEl, value ?? '');
           } else {
-            el.value = value ?? '';
+            typeEl.value = value ?? '';
           }
 
-          if (savedType) { try { el.type = savedType; } catch (_) {} }
+          if (savedType) { try { typeEl.type = savedType; } catch (_) {} }
 
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.dispatchEvent(new Event('change', { bubbles: true }));
+          typeEl.dispatchEvent(new Event('input', { bubbles: true }));
+          typeEl.dispatchEvent(new Event('change', { bubbles: true }));
         }
         break;
       }
 
-      case 'select':
-        el.value = value;
-        el.dispatchEvent(new Event('change', { bubbles: true }));
+      case 'select': {
+        if (el.tagName === 'SELECT') {
+          el.value = value;
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          break;
+        }
+
+        // Combobox/listbox widgets (e.g. Jira issue type)
+        await selectComboOption(el, value ?? '');
         break;
+      }
 
       case 'key': {
         const keyName = value ?? 'Enter';
@@ -903,6 +1074,88 @@
     `;
     clearTimeout(bar._hideTimer);
     bar._hideTimer = setTimeout(() => bar.remove(), 2500);
+  }
+
+  async function selectComboOption(rootEl, optionText) {
+    const text = String(optionText ?? '').trim();
+    if (!text) return;
+
+    // Focus + click to open the dropdown
+    rootEl.focus?.();
+    rootEl.click();
+    await delay(100);
+
+    const inputEl =
+      (rootEl.matches('input,textarea,[role="combobox"]') ? rootEl : null) ??
+      rootEl.querySelector('input,textarea,[role="combobox"],[contenteditable="true"]');
+
+    const keyTarget = inputEl || rootEl;
+
+    // Type the option text to filter the list
+    if (inputEl) {
+      if (inputEl.isContentEditable) {
+        inputEl.textContent = text;
+        inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, data: text }));
+      } else {
+        const setter =
+          Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ??
+          Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+        if (setter && (inputEl instanceof HTMLInputElement || inputEl instanceof HTMLTextAreaElement)) {
+          setter.call(inputEl, text);
+        } else {
+          inputEl.value = text;
+        }
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+
+    // Wait for the dropdown to filter/render — AUI can be slow
+    await delay(400);
+
+    const normalize = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const target = normalize(text);
+
+    // Search order:
+    // 1. Standard [role="option"] (visible)
+    // 2. AUI .aui-list-item anchor text (the visible label inside <a>)
+    // 3. Broader li inside any aui-list
+    const findOption = () => {
+      // Standard ARIA options
+      const ariaOption = Array.from(document.querySelectorAll('[role="option"]'))
+        .find((n) => n.offsetParent !== null && normalize(n.textContent) === target);
+      if (ariaOption) return ariaOption;
+
+      // AUI list items — the clickable element is the <a> inside <li>
+      const auiAnchor = Array.from(document.querySelectorAll('.aui-list-item a, [class*="aui-list"] li a'))
+        .find((n) => n.offsetParent !== null && normalize(n.textContent) === target);
+      if (auiAnchor) return auiAnchor;
+
+      // AUI: partial match fallback (in case displayed text has extra whitespace)
+      const auiPartial = Array.from(document.querySelectorAll('.aui-list-item a, [class*="aui-list"] li a'))
+        .find((n) => n.offsetParent !== null && normalize(n.textContent).includes(target));
+      if (auiPartial) return auiPartial;
+
+      return null;
+    };
+
+    let option = findOption();
+
+    // If still not visible, wait a bit longer (slow AUI XHR autocomplete)
+    if (!option) {
+      await delay(600);
+      option = findOption();
+    }
+
+    if (option) {
+      option.click();
+      return;
+    }
+
+    // Last resort: press Enter on the filtered input
+    const init = { key: 'Enter', bubbles: true, cancelable: true };
+    keyTarget.dispatchEvent(new KeyboardEvent('keydown', init));
+    keyTarget.dispatchEvent(new KeyboardEvent('keypress', init));
+    keyTarget.dispatchEvent(new KeyboardEvent('keyup', init));
   }
 
   function waitForElement(selector, timeoutMs) {

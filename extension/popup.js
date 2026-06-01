@@ -116,6 +116,18 @@ function bindStaticEvents() {
     checkServerHealth(true);
   });
 
+  // ESC stops any active recording (main Record tab or workflow editor)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (state.recording) {
+      // Main Record tab
+      stopRecording();
+    } else {
+      // Workflow editor recording — find the active stop button and click it
+      document.querySelector('.tpl-rec-btn.recording')?.click();
+    }
+  });
+
   // Background → popup messages (e.g. live step updates while popup is open)
   chrome.runtime.onMessage.addListener(onBackgroundMessage);
 }
@@ -455,11 +467,13 @@ function openTemplateEditor(tpl, li) {
 
   recBtn.addEventListener('click', async () => {
     if (!editorRecording) {
-      // Clear any leftover steps from the Record tab, then start recording
+      // Clear any leftover steps from the Record tab, then start recording.
+      // noAutoNavigate=true prevents background from inserting a navigate step
+      // just because STATE.steps was cleared — this is an edit, not a new recording.
       await sendMsg({ type: 'CLEAR_STEPS' });
       state.steps = [];
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      const res = await sendMsg({ type: 'START_RECORDING', tabId: tab.id });
+      const res = await sendMsg({ type: 'START_RECORDING', tabId: tab.id, noAutoNavigate: true });
       if (!res?.success) {
         showStatus(dom.recordError, res?.error ?? 'Could not start recording', false);
         return;
@@ -479,7 +493,11 @@ function openTemplateEditor(tpl, li) {
       recBanner.classList.add('hidden');
 
       const newSteps = res?.steps ?? [];
-      newSteps.forEach(s => draft.steps.push({ ...s }));
+      // Replace the tail of draft.steps with the final recorded steps.
+      // Do NOT append — live updates via _onStepsUpdated already kept draft in
+      // sync, so appending would duplicate every step.
+      const origCount = tpl.steps.length;
+      draft.steps = draft.steps.slice(0, origCount).concat(newSteps.map(s => ({ ...s })));
       // Clear from background so Record tab is clean
       await sendMsg({ type: 'CLEAR_STEPS' });
       state.steps = [];
@@ -539,6 +557,7 @@ function buildEditorStep(step, index, draft, refresh) {
   const varName = step.suggestedVar;
   const alreadyVar = isType && step.value?.startsWith('{{');
   const isDate = step.fieldType === 'date';
+  const ALL_EDITOR_ACTIONS = ['click', 'type', 'select', 'navigate', 'wait', 'key'];
   li.innerHTML = `
     <span class="tpl-drag-handle" title="Drag to reorder">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/></svg>
@@ -546,7 +565,9 @@ function buildEditorStep(step, index, draft, refresh) {
     <span class="tpl-step-num">${index + 1}</span>
     <div class="tpl-step-fields">
       <div class="tpl-step-action-row">
-        <span class="tpl-action-badge tpl-action-${esc(actionBadge)}">${esc(actionBadge)}</span>
+        <select class="tpl-action-select tpl-action-${esc(actionBadge)}" title="Change action type">
+          ${ALL_EDITOR_ACTIONS.map(a => `<option value="${a}"${a === actionBadge ? ' selected' : ''}>${a}</option>`).join('')}
+        </select>
         ${isDate ? '<span class="tpl-date-badge" title="Calendar / date field">📅</span>' : ''}
         <input class="tpl-step-desc" type="text" value="${esc(step.description ?? '')}" placeholder="Describe this step…" />
       </div>
@@ -607,6 +628,13 @@ function buildEditorStep(step, index, draft, refresh) {
       draft.steps[index].value = e.target.value;
     });
   }
+  li.querySelector('.tpl-action-select').addEventListener('change', (e) => {
+    draft.steps[index].action = e.target.value;
+    if (!['type', 'select', 'navigate', 'key'].includes(e.target.value)) {
+      delete draft.steps[index].value;
+    }
+    refresh();
+  });
 
   li.querySelector('.tpl-step-delay').addEventListener('change', (e) => {
     const v = parseInt(e.target.value, 10);
@@ -717,7 +745,10 @@ async function executeTemplate() {
   if (!userRequest) { dom.userRequest.focus(); return; }
 
   dom.btnExecute.disabled = true;
-  if (dom.btnStop) dom.btnStop.classList.remove('hidden');
+  if (dom.btnStop) {
+    dom.btnStop.disabled = false;
+    dom.btnStop.classList.remove('hidden');
+  }
   dom.executeLabel.textContent = 'Running…';
   setStatus(dom.playStatus, 'Asking AI to fill variables…', '');
 
@@ -743,7 +774,10 @@ async function executeTemplate() {
     setStatus(dom.playStatus, `✗ ${err.message}`, 'error');
   } finally {
     dom.btnExecute.disabled = false;
-    if (dom.btnStop) dom.btnStop.classList.add('hidden');
+    if (dom.btnStop) {
+      dom.btnStop.disabled = false;
+      dom.btnStop.classList.add('hidden');
+    }
     dom.executeLabel.textContent = '▶ Execute with AI';
   }
 
@@ -926,32 +960,68 @@ function editStep(index, liEl) {
   const existing = liEl.querySelector('.step-edit-form');
   if (existing) { existing.remove(); return; }
 
-  const isType = step.action === 'type';
+  const ALL_ACTIONS = ['click', 'type', 'select', 'navigate', 'wait', 'key'];
+  const actionHasValue = (a) => ['type', 'select', 'navigate', 'key'].includes(a);
+  const getValueLabel = (a) => {
+    if (a === 'navigate') return 'URL';
+    if (a === 'key')      return 'Key';
+    if (a === 'select')   return 'Option';
+    return 'Value <span class="label-hint">(use {{var}} for AI placeholders)</span>';
+  };
+  const getValuePlaceholder = (a) => {
+    if (a === 'navigate') return 'https://example.com';
+    if (a === 'key')      return 'Enter, Tab, Escape, Space…';
+    if (a === 'select')   return 'Option to select…';
+    return '';
+  };
+
+  const curAction = step.action ?? 'click';
   const form = document.createElement('div');
   form.className = 'step-edit-form';
   form.innerHTML = `
+    <label class="edit-label">Action</label>
+    <select class="edit-action">
+      ${ALL_ACTIONS.map(a => `<option value="${a}"${a === curAction ? ' selected' : ''}>${a}</option>`).join('')}
+    </select>
     <label class="edit-label">Description</label>
     <input class="edit-desc" type="text" value="${esc(step.description ?? '')}" />
-    ${isType ? `
-    <label class="edit-label">Value <span class="label-hint">(use {{var}} for AI placeholders)</span></label>
-    <input class="edit-val" type="text" value="${esc(step.value ?? '')}" />
-    ` : ''}
+    <div class="edit-val-group"${actionHasValue(curAction) ? '' : ' style="display:none"'}>
+      <label class="edit-label edit-val-label">${getValueLabel(curAction)}</label>
+      <input class="edit-val" type="${curAction === 'navigate' ? 'url' : 'text'}" placeholder="${getValuePlaceholder(curAction)}" value="${esc(step.value ?? '')}" />
+    </div>
     <div class="edit-btns">
       <button class="btn-gradient btn-sm save-edit">Save</button>
       <button class="btn-ghost-sm cancel-edit">Cancel</button>
     </div>
   `;
   liEl.appendChild(form);
+
+  const actionSel = form.querySelector('.edit-action');
+  const valGroup  = form.querySelector('.edit-val-group');
+  const valLabel  = form.querySelector('.edit-val-label');
+  const valInput  = form.querySelector('.edit-val');
+
+  actionSel.addEventListener('change', () => {
+    const a = actionSel.value;
+    const show = actionHasValue(a);
+    valGroup.style.display = show ? '' : 'none';
+    if (show) {
+      valLabel.innerHTML = getValueLabel(a);
+      valInput.placeholder = getValuePlaceholder(a);
+      valInput.type = a === 'navigate' ? 'url' : 'text';
+    }
+  });
+
   form.querySelector('.edit-desc').focus();
 
   form.querySelector('.cancel-edit').addEventListener('click', () => form.remove());
   form.querySelector('.save-edit').addEventListener('click', () => {
-    const desc = form.querySelector('.edit-desc').value;
-    state.steps[index] = { ...step, description: desc };
-    if (isType) {
-      const val = form.querySelector('.edit-val')?.value;
-      if (val !== undefined) state.steps[index].value = val;
-    }
+    const action = actionSel.value;
+    const desc   = form.querySelector('.edit-desc').value;
+    const val    = actionHasValue(action) ? (valInput.value ?? '') : undefined;
+    state.steps[index] = { ...step, action, description: desc };
+    if (val !== undefined) state.steps[index].value = val;
+    chrome.runtime.sendMessage({ type: 'UPDATE_STEPS', steps: state.steps }).catch(() => {});
     renderSteps();
   });
   form.addEventListener('keydown', (e) => {

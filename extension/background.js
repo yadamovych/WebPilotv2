@@ -34,7 +34,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   switch (message.type) {
     case 'START_RECORDING':
-      handleStartRecording(message.tabId).then(sendResponse).catch(err => sendResponse({ error: err.message }));
+      handleStartRecording(message.tabId, { noAutoNavigate: message.noAutoNavigate ?? false })
+        .then(sendResponse).catch(err => sendResponse({ error: err.message }));
       break;
     case 'STOP_RECORDING':
       handleStopRecording().then(sendResponse).catch(err => sendResponse({ error: err.message }));
@@ -107,7 +108,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 // ---------------------------------------------------------------------------
 // Recording
 // ---------------------------------------------------------------------------
-async function handleStartRecording(tabId) {
+async function handleStartRecording(tabId, { noAutoNavigate = false } = {}) {
   try {
     let tab;
     if (!tabId) {
@@ -121,17 +122,20 @@ async function handleStartRecording(tabId) {
     // tab or a page that predates the extension install.
     await ensureContentScript(tabId);
 
+    const wasRecording = STATE.recording;
     STATE.recording = true;
     STATE.recordingTabId = tabId;
     // Do NOT clear steps here — user may be adding more steps to an existing session
 
     // Only add navigate step if this is the very first start of a new session
     // (not after clear, not after stop/start, not after resume)
+    // noAutoNavigate suppresses this when called from the workflow editor.
     if (
+      !noAutoNavigate &&
       STATE.steps.length === 0 &&
       tab?.url &&
       !tab.url.startsWith('chrome') &&
-      !STATE.recording // only if not already recording
+      !wasRecording // only on real start, not resume
     ) {
       const url = tab.url;
       const label = `Navigate to ${url}`;
