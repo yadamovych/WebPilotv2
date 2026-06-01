@@ -51,6 +51,16 @@ Browser automation powered by AI — record workflows once, replay them with nat
 
 ---
 
+## Roadmap & Improvements
+
+See [IMPROVEMENTS.md](IMPROVEMENTS.md) for:
+- Detailed comparison with Selenium IDE
+- Recommended enhancements (multi-locator fallback, assertions, control flow, etc.)
+- Headless execution & CI/CD integration
+- Phase-based implementation roadmap
+
+---
+
 ## Architecture
 
 ```
