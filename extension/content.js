@@ -25,6 +25,21 @@
     if (res?.state?.recording) startRecording();
   });
 
+  // Resume recording when tab becomes visible again (user switches back to this tab)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopRecording();
+    } else {
+      // Check recording state when tab becomes visible again
+      chrome.runtime.sendMessage({ type: 'GET_STATE' }, (res) => {
+        if (chrome.runtime.lastError) return;
+        if (res?.state?.recording && !isRecording) {
+          startRecording();
+        }
+      });
+    }
+  });
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
@@ -34,6 +49,87 @@
 
   // Map<selector, { tid: number, el: Element }> — debounce timers for input events
   const inputTimers = new Map();
+
+  // Map<variableName, value> — extracted values from elements during playback
+  const extractedValues = new Map();
+
+  // Store extracted values in chrome.storage for cross-frame/page access
+  function storeExtractedValue(varName, value) {
+    extractedValues.set(varName, value);
+    chrome.storage.session.set({ [`extracted_${varName}`]: value }).catch(() => {});
+  }
+
+  function getExtractedValue(varName) {
+    return extractedValues.get(varName);
+  }
+
+  function getAllExtractedVariables() {
+    return Array.from(extractedValues.entries());
+  }
+
+  function getAvailableVariablesForFilling(callback) {
+    // Get extracted values first
+    const extracted = Array.from(extractedValues.entries());
+    
+    // Also get recorded extract steps from background (for recording phase variables)
+    chrome.runtime.sendMessage({ type: 'GET_STATE' }, (res) => {
+      if (chrome.runtime.lastError) {
+        callback(extracted);
+        return;
+      }
+      
+      const steps = res?.state?.steps || [];
+      const extractSteps = steps.filter(step => step.action === 'extract');
+      
+      // Combine: show extracted values first, then recorded variables with 'pending' prefix
+      const combined = [
+        ...extracted,
+        ...extractSteps
+          .filter(step => !extractedValues.has(step.variable))
+          .map(step => [step.variable, null]) // null value = not yet extracted
+      ];
+      
+      callback(combined);
+    });
+  }
+
+  // Load extracted values from storage on initialization
+  chrome.storage.session.get(null, (items) => {
+    Object.entries(items || {}).forEach(([key, value]) => {
+      if (key.startsWith('extracted_')) {
+        const varName = key.replace('extracted_', '');
+        extractedValues.set(varName, value);
+      }
+    });
+  });
+
+  // Extract text/value from element by selector
+  function extractFromElement(selector, extractType = 'text') {
+    if (!selector) return '';
+    const el = document.querySelector(selector);
+    if (!el) return '';
+
+    if (extractType === 'value') {
+      // Get value from input/textarea
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        return el.value || '';
+      }
+      // Try data attributes
+      if (el.hasAttribute('data-value')) {
+        return el.getAttribute('data-value') || '';
+      }
+      return el.textContent?.trim() || '';
+    }
+
+    // Default: extract text content
+    if (el.isContentEditable) {
+      return el.textContent?.trim() || '';
+    }
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+      return el.value || '';
+    }
+    return el.textContent?.trim() || '';
+  }
 
   // ---------------------------------------------------------------------------
   // Utility: strip Markdown syntax so rich-text editors (Jira, Confluence, etc.)
@@ -200,6 +296,124 @@
         font-size: 12px; opacity: .8;
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       }
+      
+      /* Extract Modal */
+      #webpilot-extract-modal {
+        position: fixed; inset: 0;
+        z-index: 2147483648;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,.5);
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      .wp-extract-overlay {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .wp-extract-panel {
+        background: #fff; border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0,0,0,.3);
+        width: 90%; max-width: 360px;
+        overflow: hidden;
+      }
+      .wp-extract-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 16px;
+        border-bottom: 1px solid #e5e7eb;
+        font: 700 14px/1.4 inherit;
+      }
+      .wp-extract-close {
+        background: none; border: none; font-size: 24px;
+        cursor: pointer; color: #6b7280;
+        padding: 0; width: 28px; height: 28px;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .wp-extract-close:hover { color: #111; }
+      .wp-extract-body {
+        padding: 14px 16px;
+        display: flex; flex-direction: column; gap: 12px;
+      }
+      .wp-extract-field {
+        display: flex; flex-direction: column; gap: 4px;
+      }
+      .wp-extract-label {
+        font-size: 12px; font-weight: 600; color: #4b5563;
+        text-transform: uppercase; letter-spacing: 0.3px;
+      }
+      .wp-extract-var-input {
+        padding: 8px 10px; border: 1.5px solid #d1d5db;
+        border-radius: 4px; font-size: 13px; font: inherit;
+        box-sizing: border-box; transition: border-color .15s;
+      }
+      .wp-extract-var-input:focus {
+        outline: none; border-color: #3b82f6;
+      }
+      .wp-extract-type-group {
+        display: flex; flex-direction: column; gap: 6px;
+      }
+      .wp-extract-radio {
+        display: flex; align-items: center; gap: 6px;
+        cursor: pointer; font-size: 13px; user-select: none;
+      }
+      .wp-extract-radio input[type="radio"] {
+        cursor: pointer;
+      }
+      .wp-extract-footer {
+        display: flex; gap: 8px; padding: 12px 16px;
+        border-top: 1px solid #e5e7eb;
+        justify-content: flex-end;
+      }
+      .wp-extract-btn-cancel,
+      .wp-extract-btn-extract {
+        padding: 6px 14px; border-radius: 4px;
+        font-size: 13px; font-weight: 500; border: none;
+        cursor: pointer; transition: all .15s;
+      }
+      .wp-extract-btn-cancel {
+        background: #f3f4f6; color: #374151;
+      }
+      .wp-extract-btn-cancel:hover { background: #e5e7eb; }
+      .wp-extract-btn-extract {
+        background: #3b82f6; color: #fff;
+      }
+      .wp-extract-btn-extract:hover { background: #2563eb; }
+      
+      /* Extracted variables list */
+      .wp-extract-vars-list {
+        display: flex; flex-direction: column; gap: 6px;
+      }
+      .wp-extract-var-btn {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 10px; background: #f0f9ff; border: 1.5px solid #bfdbfe;
+        border-radius: 4px; cursor: pointer; text-align: left;
+        font-size: 12px; transition: all .15s;
+      }
+      .wp-extract-var-btn:hover {
+        background: #e0f2fe; border-color: #7dd3fc;
+      }
+      .wp-var-name {
+        font-weight: 600; color: #0369a1; font-family: monospace;
+        flex-shrink: 0; margin-right: 8px;
+      }
+      .wp-var-value {
+        color: #64748b; font-size: 11px; flex: 1;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .wp-extract-divider {
+        display: flex; align-items: center; gap: 8px;
+        color: #9ca3af; font-size: 12px; font-weight: 500;
+        margin: 4px 0;
+      }
+      .wp-extract-divider::before,
+      .wp-extract-divider::after {
+        content: ''; flex: 1; height: 1px; background: #d1d5db;
+      }
+      .wp-no-vars {
+        display: block; text-align: center;
+        padding: 12px 8px; color: #9ca3af; font-size: 12px;
+        font-style: italic;
+      }
 
     `;
     document.head.appendChild(style);
@@ -235,25 +449,34 @@
     handlers.mouseout = onMouseOut;
     handlers.input = onInput;
     handlers.change = onChange;
+    handlers.contextmenu = onRecordingContextMenu;
 
     // Use bubble phase (false) so we observe without blocking any page interaction
-    document.addEventListener('click',     handlers.click,     false);
-    document.addEventListener('mouseover', handlers.mouseover, false);
-    document.addEventListener('mouseout',  handlers.mouseout,  false);
-    document.addEventListener('input',     handlers.input,     false);
-    document.addEventListener('change',    handlers.change,    false);
+    document.addEventListener('click',        handlers.click,        false);
+    document.addEventListener('mouseover',    handlers.mouseover,    false);
+    document.addEventListener('mouseout',     handlers.mouseout,     false);
+    document.addEventListener('input',        handlers.input,        false);
+    document.addEventListener('change',       handlers.change,       false);
+    document.addEventListener('contextmenu',  handlers.contextmenu,  false);
   }
 
   function detachListeners() {
-    document.removeEventListener('click',     handlers.click,     false);
-    document.removeEventListener('mouseover', handlers.mouseover, false);
-    document.removeEventListener('mouseout',  handlers.mouseout,  false);
-    document.removeEventListener('input',     handlers.input,     false);
-    document.removeEventListener('change',    handlers.change,    false);
+    document.removeEventListener('click',        handlers.click,        false);
+    document.removeEventListener('mouseover',    handlers.mouseover,    false);
+    document.removeEventListener('mouseout',     handlers.mouseout,     false);
+    document.removeEventListener('input',        handlers.input,        false);
+    document.removeEventListener('change',       handlers.change,       false);
+    document.removeEventListener('contextmenu',  handlers.contextmenu,  false);
   }
 
   function isWebPilotEl(el) {
-    return el === overlayRoot || overlayRoot?.contains(el);
+    if (!el) return false;
+    // Check overlay
+    if (el === overlayRoot || overlayRoot?.contains(el)) return true;
+    // Check extract modal
+    const modal = document.getElementById('webpilot-extract-modal');
+    if (el === modal || modal?.contains(el)) return true;
+    return false;
   }
 
   /**
@@ -531,6 +754,163 @@
     }
   }
 
+  function onRecordingContextMenu(e) {
+    if (!isRecording) return;
+    
+    const targetEl = e.target;
+    if (isWebPilotEl(targetEl)) return;
+    
+    e.preventDefault();
+    showExtractModal(targetEl);
+  }
+
+  function showExtractModal(targetEl) {
+    // Remove any existing modal
+    const existingModal = document.getElementById('webpilot-extract-modal');
+    if (existingModal) existingModal.remove();
+
+    // Generate a suggested variable name from the element
+    const suggestedVarName = generateVariableName(targetEl);
+
+    // Get all available variables (extracted + recorded extract steps)
+    getAvailableVariablesForFilling((availableVars) => {
+      const hasVars = availableVars.length > 0;
+
+      const modal = document.createElement('div');
+      modal.id = 'webpilot-extract-modal';
+      modal.innerHTML = `
+        <div class="wp-extract-overlay">
+          <div class="wp-extract-panel">
+            <div class="wp-extract-header">
+              <span>Extract or Fill Element</span>
+              <button class="wp-extract-close" type="button">×</button>
+            </div>
+            <div class="wp-extract-body">
+              <div class="wp-extract-field">
+                <label class="wp-extract-label">Use Existing Variable</label>
+                <div class="wp-extract-vars-list">
+                  ${hasVars 
+                    ? availableVars.map(([varName, value]) => `
+                      <button class="wp-extract-var-btn" type="button" data-var="${varName}">
+                        <span class="wp-var-name">{{${varName}}}</span>
+                        <span class="wp-var-value">${value === null ? '(pending extraction)' : (value ?? '').slice(0, 30)}</span>
+                      </button>
+                    `).join('')
+                    : '<span class="wp-no-vars">No variables defined yet</span>'
+                  }
+                </div>
+              </div>
+              ${hasVars ? '<div class="wp-extract-divider">OR</div>' : ''}
+              <div class="wp-extract-field">
+                <label class="wp-extract-label">Extract New Variable</label>
+                <input class="wp-extract-var-input" type="text" placeholder="e.g., product_title" value="${suggestedVarName}" />
+              </div>
+              <div class="wp-extract-field">
+                <label class="wp-extract-label">Extract Type</label>
+                <div class="wp-extract-type-group">
+                  <label class="wp-extract-radio">
+                    <input type="radio" name="extractType" value="text" checked />
+                    <span>Text Content</span>
+                  </label>
+                  <label class="wp-extract-radio">
+                    <input type="radio" name="extractType" value="value" />
+                    <span>Input Value</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="wp-extract-footer">
+              <button class="wp-extract-btn-cancel" type="button">Cancel</button>
+              <button class="wp-extract-btn-extract" type="button">${hasVars ? 'Extract New' : 'Extract'}</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      const varInput = modal.querySelector('.wp-extract-var-input');
+      const extractTypeRadios = modal.querySelectorAll('input[name="extractType"]');
+      const btnCancel = modal.querySelector('.wp-extract-btn-cancel');
+      const btnExtract = modal.querySelector('.wp-extract-btn-extract');
+      const closeBtn = modal.querySelector('.wp-extract-close');
+
+      // Prevent any events inside the modal from bubbling up to recording handlers
+      modal.addEventListener('click', (e) => e.stopPropagation());
+      modal.addEventListener('input', (e) => e.stopPropagation());
+      modal.addEventListener('change', (e) => e.stopPropagation());
+
+      const cleanup = () => modal.remove();
+      const doExtract = () => {
+        const varName = varInput.value.trim();
+        if (!varName) {
+          alert('Please enter a variable name');
+          return;
+        }
+
+        const extractType = Array.from(extractTypeRadios).find(r => r.checked)?.value || 'text';
+        const selector = buildSelector(targetEl);
+        const label = getLabel(targetEl) || labelFromSelector(selector);
+        const description = `Extract ${extractType} to {{${varName}}}`;
+
+        chrome.runtime.sendMessage({
+          type: 'RECORD_ACTION',
+          action: {
+            action: 'extract',
+            selector,
+            variable: varName,
+            extractType,
+            label,
+            description,
+            elementHint: elementHint(targetEl),
+          },
+        });
+
+        flashRecorded(targetEl);
+        cleanup();
+      };
+
+      btnCancel.addEventListener('click', cleanup);
+      closeBtn.addEventListener('click', cleanup);
+      btnExtract.addEventListener('click', doExtract);
+      
+      // Handle clicking on existing variables to auto-fill
+      const varBtns = modal.querySelectorAll('.wp-extract-var-btn');
+      varBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const varName = btn.getAttribute('data-var');
+          const selector = buildSelector(targetEl);
+          const label = getLabel(targetEl) || labelFromSelector(selector);
+          const description = `Fill with {{${varName}}}`;
+
+          chrome.runtime.sendMessage({
+            type: 'RECORD_ACTION',
+            action: {
+              action: 'type',
+              selector,
+              value: `{{${varName}}}`,
+              label,
+              description,
+              elementHint: elementHint(targetEl),
+            },
+          });
+
+          flashRecorded(targetEl);
+          cleanup();
+        });
+      });
+
+      varInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doExtract();
+        if (e.key === 'Escape') cleanup();
+      });
+
+      // Auto-focus and select the input
+      varInput.focus();
+      varInput.select();
+    });
+  }
+
   /** Returns true for native date/time input types handled by the browser's date picker. */
   function isDateField(el) {
     if (!el || el.tagName !== 'INPUT') return false;
@@ -765,6 +1145,38 @@
   }
 
   /**
+   * Generate a valid variable name from element label or content.
+   * Converts label text to snake_case and removes invalid characters.
+   */
+  function generateVariableName(el) {
+    const label = getLabel(el);
+    if (!label) return 'extracted_value';
+    
+    // Convert to snake_case:
+    // 1. Lowercase
+    // 2. Replace spaces and hyphens with underscores
+    // 3. Remove any other special characters
+    // 4. Collapse multiple underscores
+    let varName = label
+      .toLowerCase()
+      .trim()
+      .slice(0, 40)  // Limit length
+      .replace(/\s+/g, '_')  // Spaces to underscores
+      .replace(/-+/g, '_')   // Hyphens to underscores
+      .replace(/[^a-z0-9_]/g, '')  // Remove non-alphanumeric/underscore
+      .replace(/_+/g, '_')   // Collapse multiple underscores
+      .replace(/^_+|_+$/g, '')  // Remove leading/trailing underscores
+      .replace(/^[0-9]/, '');  // Remove leading digits
+    
+    // Ensure it's not empty and doesn't start with number
+    if (!varName || /^\d/.test(varName)) {
+      varName = 'extracted_value';
+    }
+    
+    return varName;
+  }
+
+  /**
    * Look for visible label text near `el` by walking up the DOM.
    * At each ancestor level check:
    *   - an immediately preceding sibling with text
@@ -933,6 +1345,14 @@
       return { success: true };
     }
 
+    if (action === 'extract') {
+      const extractedValue = extractFromElement(selector, step.extractType || 'text');
+      const varName = step.variable || 'extracted';
+      storeExtractedValue(varName, extractedValue);
+      showProgress(index, total, `Extracted "${varName}" = "${extractedValue.substring(0, 50)}${extractedValue.length > 50 ? '...' : ''}"`);
+      return { success: true, extracted: { [varName]: extractedValue } };
+    }
+
     // key with no selector — dispatch on currently focused element
     if (action === 'key' && !selector) {
       const keyTarget = document.activeElement || document.body;
@@ -982,10 +1402,21 @@
         typeEl.focus();
         await delay(50);
 
+        // Replace {{variableName}} with extracted values
+        let finalValue = value ?? '';
+        const varMatches = finalValue.match(/{{\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*}}/g) || [];
+        varMatches.forEach((match) => {
+          const varName = match.replace(/[{}\\s]/g, '');
+          const extracted = getExtractedValue(varName);
+          if (extracted !== undefined) {
+            finalValue = finalValue.replace(match, extracted);
+          }
+        });
+
         if (typeEl.isContentEditable) {
           // contenteditable (e.g. Jira rich-text editor, ProseMirror, Quill)
           // Accept HTML for formatting (from AI output) — Jira will render <b>, <ul>, <a>, etc.
-          const htmlValue = value ?? '';
+          const htmlValue = finalValue;
           // Select all existing content and replace with typed value
           const selection = window.getSelection();
           const range = document.createRange();
@@ -1013,9 +1444,9 @@
             Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
             Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
           if (nativeSetter && (typeEl instanceof HTMLInputElement || typeEl instanceof HTMLTextAreaElement)) {
-            nativeSetter.call(typeEl, value ?? '');
+            nativeSetter.call(typeEl, finalValue ?? '');
           } else {
-            typeEl.value = value ?? '';
+            typeEl.value = finalValue ?? '';
           }
 
           if (savedType) { try { typeEl.type = savedType; } catch (_) {} }
