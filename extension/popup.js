@@ -552,12 +552,13 @@ function buildEditorStep(step, index, draft, refresh) {
   const isType   = step.action === 'type';
   const isSelect = step.action === 'select';
   const isKey    = step.action === 'key';
+  const isExtract = step.action === 'extract';
   const actionBadge = step.action ?? 'action';
   const selectorHint = step.selector ?? '';
   const varName = step.suggestedVar;
   const alreadyVar = isType && step.value?.startsWith('{{');
   const isDate = step.fieldType === 'date';
-  const ALL_EDITOR_ACTIONS = ['click', 'type', 'select', 'navigate', 'wait', 'key'];
+  const ALL_EDITOR_ACTIONS = ['click', 'type', 'select', 'navigate', 'wait', 'key', 'extract'];
   li.innerHTML = `
     <span class="tpl-drag-handle" title="Drag to reorder">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/></svg>
@@ -590,6 +591,21 @@ function buildEditorStep(step, index, draft, refresh) {
         <div class="tpl-val-row">
           <span class="tpl-key-icon" title="Key to press">⌨</span>
           <input class="tpl-step-val" type="text" value="${esc(step.value ?? 'Enter')}" placeholder="Key name (Enter, Tab, Escape, Space…)" />
+        </div>
+      ` : ''}
+      ${isExtract ? `
+        <div class="tpl-extract-row">
+          <div class="tpl-extract-field">
+            <label class="tpl-extract-label">Variable</label>
+            <input class="tpl-extract-var" type="text" value="${esc(step.variable ?? '')}" placeholder="e.g. vehicle_title" />
+          </div>
+          <div class="tpl-extract-field">
+            <label class="tpl-extract-label">Type</label>
+            <select class="tpl-extract-type">
+              <option value="text"${!step.extractType || step.extractType === 'text' ? ' selected' : ''}>Text</option>
+              <option value="value"${step.extractType === 'value' ? ' selected' : ''}>Value</option>
+            </select>
+          </div>
         </div>
       ` : ''}
       ${selectorHint || step.elementHint ? `
@@ -656,6 +672,10 @@ function buildEditorStep(step, index, draft, refresh) {
     if (!['type', 'select', 'navigate', 'key'].includes(e.target.value)) {
       delete draft.steps[index].value;
     }
+    if (e.target.value !== 'extract') {
+      delete draft.steps[index].variable;
+      delete draft.steps[index].extractType;
+    }
     refresh();
   });
 
@@ -663,6 +683,20 @@ function buildEditorStep(step, index, draft, refresh) {
     const v = parseInt(e.target.value, 10);
     draft.steps[index].delayMs = isNaN(v) || v < 0 ? 0 : v;
   });
+
+  // Extract field listeners
+  const extractVarInput = li.querySelector('.tpl-extract-var');
+  if (extractVarInput) {
+    extractVarInput.addEventListener('input', (e) => {
+      draft.steps[index].variable = e.target.value;
+    });
+  }
+  const extractTypeSelect = li.querySelector('.tpl-extract-type');
+  if (extractTypeSelect) {
+    extractTypeSelect.addEventListener('change', (e) => {
+      draft.steps[index].extractType = e.target.value;
+    });
+  }
 
   // Variable suggestion button in editor
   li.querySelector('.tpl-var-btn')?.addEventListener('click', () => {
@@ -909,6 +943,7 @@ function buildStepItem(step, index) {
 
   const isType   = step.action === 'type';
   const isSelect = step.action === 'select';
+  const isExtract = step.action === 'extract';
   const varName = step.suggestedVar;
   const alreadyVar = isType && step.value?.startsWith('{{');
   const isDate = step.fieldType === 'date';
@@ -924,6 +959,7 @@ function buildStepItem(step, index) {
       <span class="step-action step-action-${esc(step.action ?? 'action')} ${isDate ? 'step-action-date' : ''}">${esc(step.action)}</span>
       ${isAutoNav ? '<span class="step-auto-badge" title="Auto-recorded start URL">auto</span>' : ''}
       ${isDate ? '<span class="step-field-badge date-badge" title="Calendar / date field">📅</span>' : ''}
+      ${isExtract ? `<span class="step-extract-badge" title="Extract to variable">📋 {{${esc(step.variable ?? 'var')}}}</span>` : ''}
       ${isSelect && step.value ? `<span class="step-select-badge">▾ ${esc(step.value)}</span>` : ''}
       <div class="step-desc" title="${esc(step.description ?? step.selector ?? '')}">${esc(step.description ?? step.selector ?? '')}</div>
       ${hint ? `<div class="step-element-hint" title="${esc(hint)}">${esc(hint)}</div>` : ''}
@@ -987,8 +1023,9 @@ function editStep(index, liEl) {
   const existing = liEl.querySelector('.step-edit-form');
   if (existing) { existing.remove(); return; }
 
-  const ALL_ACTIONS = ['click', 'type', 'select', 'navigate', 'wait', 'key'];
+  const ALL_ACTIONS = ['click', 'type', 'select', 'navigate', 'wait', 'key', 'extract'];
   const actionHasValue = (a) => ['type', 'select', 'navigate', 'key'].includes(a);
+  const actionHasVariable = (a) => a === 'extract';
   const getValueLabel = (a) => {
     if (a === 'navigate') return 'URL';
     if (a === 'key')      return 'Key';
@@ -1016,6 +1053,15 @@ function editStep(index, liEl) {
       <label class="edit-label edit-val-label">${getValueLabel(curAction)}</label>
       <input class="edit-val" type="${curAction === 'navigate' ? 'url' : 'text'}" placeholder="${getValuePlaceholder(curAction)}" value="${esc(step.value ?? '')}" />
     </div>
+    <div class="edit-var-group"${actionHasVariable(curAction) ? '' : ' style="display:none"'}>
+      <label class="edit-label">Variable Name</label>
+      <input class="edit-var" type="text" placeholder="e.g., vehicle_title" value="${esc(step.variable ?? '')}" />
+      <label class="edit-label">Extract Type</label>
+      <select class="edit-extract-type">
+        <option value="text"${!step.extractType || step.extractType === 'text' ? ' selected' : ''}>Text Content</option>
+        <option value="value"${step.extractType === 'value' ? ' selected' : ''}>Input Value</option>
+      </select>
+    </div>
     <div class="edit-btns">
       <button class="btn-gradient btn-sm save-edit">Save</button>
       <button class="btn-ghost-sm cancel-edit">Cancel</button>
@@ -1027,12 +1073,17 @@ function editStep(index, liEl) {
   const valGroup  = form.querySelector('.edit-val-group');
   const valLabel  = form.querySelector('.edit-val-label');
   const valInput  = form.querySelector('.edit-val');
+  const varGroup  = form.querySelector('.edit-var-group');
+  const varInput  = form.querySelector('.edit-var');
+  const extractTypeSelect = form.querySelector('.edit-extract-type');
 
   actionSel.addEventListener('change', () => {
     const a = actionSel.value;
-    const show = actionHasValue(a);
-    valGroup.style.display = show ? '' : 'none';
-    if (show) {
+    const showVal = actionHasValue(a);
+    const showVar = actionHasVariable(a);
+    valGroup.style.display = showVal ? '' : 'none';
+    varGroup.style.display = showVar ? '' : 'none';
+    if (showVal) {
       valLabel.innerHTML = getValueLabel(a);
       valInput.placeholder = getValuePlaceholder(a);
       valInput.type = a === 'navigate' ? 'url' : 'text';
@@ -1046,8 +1097,13 @@ function editStep(index, liEl) {
     const action = actionSel.value;
     const desc   = form.querySelector('.edit-desc').value;
     const val    = actionHasValue(action) ? (valInput.value ?? '') : undefined;
+    const variable = actionHasVariable(action) ? (varInput.value ?? '') : undefined;
+    const extractType = actionHasVariable(action) ? (extractTypeSelect.value ?? 'text') : undefined;
+    
     state.steps[index] = { ...step, action, description: desc };
     if (val !== undefined) state.steps[index].value = val;
+    if (variable !== undefined) state.steps[index].variable = variable;
+    if (extractType !== undefined) state.steps[index].extractType = extractType;
     chrome.runtime.sendMessage({ type: 'UPDATE_STEPS', steps: state.steps }).catch(() => {});
     renderSteps();
   });
