@@ -27,6 +27,33 @@ const STATE = {
 const DEFAULT_SERVER_URL = 'http://localhost:8000';
 
 // ---------------------------------------------------------------------------
+// Session-storage persistence
+// chrome.storage.session survives service-worker restarts within the same
+// browser session, so recording state (steps, tabId, flag) is not lost when
+// Chrome suspends the SW mid-recording.
+// ---------------------------------------------------------------------------
+(async () => {
+  try {
+    const { recordingState } = await chrome.storage.session.get('recordingState');
+    if (recordingState) {
+      STATE.recording      = recordingState.recording      ?? false;
+      STATE.recordingTabId = recordingState.recordingTabId ?? null;
+      STATE.steps          = recordingState.steps          ?? [];
+    }
+  } catch (_) { /* storage.session unavailable on very old Chrome — ignore */ }
+})();
+
+function persistState() {
+  chrome.storage.session.set({
+    recordingState: {
+      recording:      STATE.recording,
+      recordingTabId: STATE.recordingTabId,
+      steps:          STATE.steps,
+    },
+  }).catch(() => {});
+}
+
+// ---------------------------------------------------------------------------
 // Message dispatcher
 // ---------------------------------------------------------------------------
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -42,11 +69,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
     case 'CLEAR_STEPS':
       STATE.steps = [];
+      persistState();
       chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: [] }).catch(() => {});
       sendResponse({ success: true });
       break;
     case 'UPDATE_STEPS':
       STATE.steps = message.steps ?? STATE.steps;
+      persistState();
       sendResponse({ success: true });
       break;
     case 'RECORD_ACTION':
@@ -151,10 +180,12 @@ async function handleStartRecording(tabId, { noAutoNavigate = false } = {}) {
       chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
     }
 
+    persistState();
     await broadcastToFrames(tabId, { type: 'START_RECORDING' });
     return { success: true, tabId };
   } catch (err) {
     STATE.recording = false;
+    persistState();
     return { error: err.message };
   }
 }
@@ -167,6 +198,7 @@ async function handleStopRecording() {
   } finally {
     STATE.recording = false;
     STATE.recordingTabId = null;
+    persistState();
   }
   return { success: true, steps: STATE.steps };
 }
@@ -191,6 +223,7 @@ function handleRecordAction(action, tabId, sendResponse) {
         id: last.id,          // keep stable ID
         timestamp: now,
       };
+      persistState();
       chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
       sendResponse({ success: true });
       return;
@@ -213,6 +246,7 @@ function handleRecordAction(action, tabId, sendResponse) {
       id: crypto.randomUUID(),
       timestamp: now,
     });
+    persistState();
     chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
   }
   sendResponse({ success: true });

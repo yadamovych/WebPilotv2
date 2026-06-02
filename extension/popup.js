@@ -571,6 +571,7 @@ function buildEditorStep(step, index, draft, refresh) {
         ${isDate ? '<span class="tpl-date-badge" title="Calendar / date field">📅</span>' : ''}
         <input class="tpl-step-desc" type="text" value="${esc(step.description ?? '')}" placeholder="Describe this step…" />
       </div>
+      ${selectorHint ? `<div class="tpl-selector-chip" title="CSS selector — hover this step to highlight the element on the page"><code>${esc(shortSelector(selectorHint))}</code></div>` : ''}
       ${isType ? `
         <div class="tpl-val-row">
           <input class="tpl-step-val" type="text" value="${esc(step.value ?? '')}" placeholder="${isDate ? 'Date value or {{var}} (e.g. YYYY-MM-DD)' : 'Value ({{var}} for AI)'}" />
@@ -618,6 +619,28 @@ function buildEditorStep(step, index, draft, refresh) {
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
     </button>
   `;
+
+  // Hover the step row → highlight the corresponding element on the active tab
+  let _hlTab = null;
+  li.addEventListener('mouseenter', async () => {
+    if (!step.selector) return;
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+      _hlTab = tab.id;
+      chrome.tabs.sendMessage(tab.id, {
+        type: 'HIGHLIGHT_STEP_ELEMENT',
+        selector: step.selector,
+        action: step.action,
+        description: step.description || step.label || '',
+      }).catch(() => {});
+    } catch (_) {}
+  });
+  li.addEventListener('mouseleave', () => {
+    if (_hlTab == null) return;
+    chrome.tabs.sendMessage(_hlTab, { type: 'UNHIGHLIGHT_STEP_ELEMENT' }).catch(() => {});
+    _hlTab = null;
+  });
 
   li.querySelector('.tpl-step-desc').addEventListener('input', (e) => {
     draft.steps[index].description = e.target.value;
@@ -851,7 +874,11 @@ async function startRecording() {
 async function stopRecording() {
   const res = await sendMsg({ type: 'STOP_RECORDING' });
   state.recording = false;
-  state.steps = res?.steps ?? state.steps;
+  // Guard: if the service worker was restarted mid-recording its STATE.steps is
+  // empty even though we had steps.  Prefer our local copy in that case.
+  if (res?.steps?.length > 0) {
+    state.steps = res.steps;
+  }
   applyRecordingUI();
   renderSteps();
 }
@@ -1103,6 +1130,28 @@ function esc(str) {
   const d = document.createElement('div');
   d.textContent = str ?? '';
   return d.innerHTML;
+}
+
+/**
+ * Return a compact, human-readable representation of a CSS selector for the
+ * step identity chip shown inline in the workflow editor.
+ */
+function shortSelector(sel) {
+  if (!sel) return '';
+  // [aria-label="..."] → show the label text
+  const ariaM = sel.match(/\[aria-label=["']([^"']+)["']\]/);
+  if (ariaM) return `aria: "${ariaM[1].slice(0, 35)}"`;
+  // #id → short, use as-is
+  if (/^#[\w-]+$/.test(sel)) return sel;
+  // [name=...] → compact form
+  const nameM = sel.match(/\[name=["']?([^"'\]]+)["']?\]/);
+  if (nameM) return `[name=${nameM[1].slice(0, 30)}]`;
+  // [data-testid=...]
+  const testM = sel.match(/\[data-testid=["']?([^"'\]]+)["']?\]/);
+  if (testM) return `[testid=${testM[1].slice(0, 30)}]`;
+  // last segment of a descendant path
+  const last = sel.split('>').pop().trim();
+  return last.length <= 42 ? last : last.slice(0, 39) + '…';
 }
 
 function setStatus(el, text, cls) {

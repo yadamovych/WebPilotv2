@@ -656,6 +656,31 @@ header {
   cursor: default;
   transition: box-shadow var(--transition), border-color var(--transition);
 }
+.tpl-step-row:hover {
+  border-color: #c4b5fd;
+  box-shadow: 0 0 0 2px rgba(109,40,217,.12);
+}
+.tpl-selector-chip {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  max-width: 100%;
+}
+.tpl-selector-chip code {
+  font-family: ui-monospace, 'Cascadia Code', 'Courier New', monospace;
+  font-size: 10px;
+  color: var(--text-2);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
+  cursor: default;
+}
 .tpl-step-row.drag-over {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px rgba(0,103,184,.2);

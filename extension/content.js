@@ -81,6 +81,28 @@
         sendResponse({ isRecording });
         break;
 
+      case 'HIGHLIGHT_STEP_ELEMENT': {
+        document.getElementById('webpilot-step-hl')?.remove();
+        const sel = message.selector;
+        if (!sel) { sendResponse({ success: true }); break; }
+        let found = false;
+        try {
+          const el = document.querySelector(sel);
+          if (el) {
+            el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            showStepHighlight(el, message.action, message.description);
+            found = true;
+          }
+        } catch (_) {}
+        sendResponse({ found });
+        break;
+      }
+
+      case 'UNHIGHLIGHT_STEP_ELEMENT':
+        document.getElementById('webpilot-step-hl')?.remove();
+        sendResponse({ success: true });
+        break;
+
       default:
         sendResponse({ error: `Unknown type: ${message.type}` });
     }
@@ -842,6 +864,64 @@
   // ---------------------------------------------------------------------------
   // Playback
   // ---------------------------------------------------------------------------
+
+  /**
+   * Persistent highlight shown while the user hovers a step row in the
+   * workflow editor.  Distinct from the dev-mode playback highlight:
+   *  • dashed violet border (vs solid blue)
+   *  • stays until UNHIGHLIGHT_STEP_ELEMENT is received
+   */
+  function showStepHighlight(el, action, description) {
+    document.getElementById('webpilot-step-hl')?.remove();
+
+    const rect    = el.getBoundingClientRect();
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'webpilot-step-hl';
+
+    const color = '#6d28d9'; // violet — distinct from recording (red) and playback (green/blue)
+
+    Object.assign(overlay.style, {
+      position:      'absolute',
+      top:           `${rect.top  + scrollY - 4}px`,
+      left:          `${rect.left + scrollX - 4}px`,
+      width:         `${rect.width  + 8}px`,
+      height:        `${rect.height + 8}px`,
+      border:        `2px dashed ${color}`,
+      borderRadius:  '5px',
+      boxShadow:     `0 0 0 3px ${color}22, 0 0 10px ${color}33`,
+      zIndex:        '2147483645',
+      pointerEvents: 'none',
+      boxSizing:     'border-box',
+    });
+
+    // Label chip
+    const chip = document.createElement('div');
+    const actionLabel = (action || 'step').toUpperCase();
+    const desc = description ? ` — ${description}` : '';
+    chip.textContent = `${actionLabel}${desc}`;
+    Object.assign(chip.style, {
+      position:     'absolute',
+      bottom:       '100%',
+      left:         '0',
+      marginBottom: '4px',
+      padding:      '2px 8px',
+      background:   color,
+      color:        '#fff',
+      fontSize:     '11px',
+      fontFamily:   'ui-monospace, monospace',
+      fontWeight:   '600',
+      borderRadius: '4px',
+      whiteSpace:   'nowrap',
+      maxWidth:     '280px',
+      overflow:     'hidden',
+      textOverflow: 'ellipsis',
+    });
+    overlay.appendChild(chip);
+    document.documentElement.appendChild(overlay);
+  }
 
   /**
    * In dev mode, surround the target element with a labelled highlight overlay
