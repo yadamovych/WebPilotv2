@@ -53,10 +53,7 @@ class FillTemplateRequest(BaseModel):
     )
     variables: list[str] = Field(
         ...,
-        description=(
-            "List of TEMPLATE VARIABLES {{varName}} to generate "
-            "(not extracted variables)"
-        ),
+        description=("List of TEMPLATE VARIABLES {{varName}} to generate " "(not extracted variables)"),
     )
     templateName: str = Field(
         ...,
@@ -159,7 +156,7 @@ async def fill_template(request: FillTemplateRequest) -> FillTemplateResponse:
     """
     Given a natural language user request and a list of TEMPLATE VARIABLE names,
     ask the AI to generate appropriate string values for each variable.
-    
+
     Note: This endpoint handles TEMPLATE VARIABLES ({{varName}}) only.
     EXTRACTED VARIABLES ([[extracted.varName]]) are resolved client-side during playback.
     """
