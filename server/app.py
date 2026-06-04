@@ -48,7 +48,7 @@ app.add_middleware(
 
 class FillTemplateRequest(BaseModel):
     userRequest: str = Field(..., description="Natural language task description from the user")
-    variables: list[str] = Field(..., description="List of {{variable}} names to fill")
+    variables: list[str] = Field(..., description="List of TEMPLATE VARIABLES {{varName}} to generate (not extracted variables)")
     templateName: str = Field(..., description="Name of the automation template")
     templateDescription: Optional[str] = Field(default="", description="Optional template description")
     backend: Optional[str] = Field(default=None, description="AI backend to use")
@@ -133,8 +133,11 @@ async def health() -> dict:
 @app.post("/api/fill-template", response_model=FillTemplateResponse, tags=["ai"])
 async def fill_template(request: FillTemplateRequest) -> FillTemplateResponse:
     """
-    Given a natural language user request and a list of template variable names,
-    ask the AI to extract/generate appropriate string values for each variable.
+    Given a natural language user request and a list of TEMPLATE VARIABLE names,
+    ask the AI to generate appropriate string values for each variable.
+    
+    Note: This endpoint handles TEMPLATE VARIABLES ({{varName}}) only.
+    EXTRACTED VARIABLES ([[extracted.varName]]) are resolved client-side during playback.
     """
     if not request.variables:
         return FillTemplateResponse(variables={})

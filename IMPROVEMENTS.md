@@ -16,7 +16,7 @@ Analysis comparing WebPilot with Selenium IDE and recommended enhancements for p
 | **Step Types** | 50+ commands (click, type, sendKeys, assert, if/else, loops, etc.) | 6 actions (click, type, select, navigate, wait, key) |
 | **Conditionals & Logic** | If/else, while loops, forEach | None |
 | **Code Export** | Yes (6+ languages) | No |
-| **AI Integration** | None | AI variable filling ({{var}}) |
+| **AI Integration** | None | AI template variables ({{var}}) + page extraction ([[extracted.var]]) |
 | **Assertions/Validation** | Built-in assert commands | None |
 | **Plugin System** | Yes | No |
 | **Headless Execution** | Yes (side-runner) | No (browser only) |
@@ -25,11 +25,12 @@ Analysis comparing WebPilot with Selenium IDE and recommended enhancements for p
 
 ## WebPilot's Unique Strengths
 
-✅ **AI-first design:** Uses LLMs to fill template variables dynamically  
+✅ **AI-first design:** Uses LLMs to fill template variables (`{{var}}`) dynamically  
+✅ **Page extraction:** Extract values from page/DOM into variables (`[[extracted.var]]`)  
 ✅ **Simpler UX:** Less cluttered, easier for non-technical users  
 ✅ **Flexible AI backends:** Groq, OpenAI, Anthropic, vLLM switching  
 ✅ **Lightweight footprint:** Minimal extension size  
-✅ **Copilot integration:** Clipboard-based text import from external AI sources  
+✅ **Copilot integration:** Clipboard-based text import from external AI sources
 
 ---
 

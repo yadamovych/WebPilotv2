@@ -173,14 +173,20 @@ The WebPilot server (port 8000) auto-discovers the loaded model.
 3. Type a natural language description, e.g.:
    > `Create a Jira ticket for PR-Agent deployment`
 4. Click **Execute with AI**.
-   - The AI server extracts `{{title}}` and `{{description}}` values from the request.
+   - The AI server generates `{{title}}` and `{{description}}` TEMPLATE VARIABLES from your request.
+   - EXTRACTED VARIABLES like `[[extracted.ticketId]]` are resolved from the page during playback.
    - The extension executes each step with the substituted values.
 
 ---
 
 ## Template format
 
-Templates are stored in `chrome.storage.local`:
+Templates are stored in `chrome.storage.local`. Steps can use two types of variables:
+
+1. **TEMPLATE VARIABLES `{{varName}}`** — AI-generated values filled based on the user request
+2. **EXTRACTED VARIABLES `[[extracted.varName]]`** — Values extracted from the page/DOM during playback
+
+Example:
 
 ```json
 {
@@ -191,12 +197,18 @@ Templates are stored in `chrome.storage.local`:
     { "action": "click",     "selector": "#create-ticket",  "label": "Create" },
     { "action": "type",      "selector": "#title",          "value": "{{title}}" },
     { "action": "type",      "selector": "#description",    "value": "{{description}}" },
+    { "action": "extract",   "selector": ".ticket-id",     "variable": "ticketId", "extractType": "text", "label": "Extract ticket ID" },
+    { "action": "type",      "selector": "#related",        "value": "[[extracted.ticketId]]" },
     { "action": "click",     "selector": "[type=submit]",   "label": "Submit" }
   ]
 }
 ```
 
-Supported step actions: `click`, `type`, `select`, `navigate`, `wait`.
+**Variable types:**
+- `{{title}}`, `{{description}}` — AI will generate these based on the user request "Create Jira ticket for PR-Agent deployment"
+- `[[extracted.ticketId]]` — Extracted from the page after the ticket is created
+
+Supported step actions: `click`, `type`, `select`, `navigate`, `wait`, `extract`.
 
 ---
 
@@ -205,11 +217,13 @@ Supported step actions: `click`, `type`, `select`, `navigate`, `wait`.
 | Method | Path | Description |
 |---|---|---|
 | `GET`  | `/health` | Health check |
-| `POST` | `/api/fill-template` | Fill `{{variable}}` placeholders with AI |
+| `POST` | `/api/fill-template` | Fill `{{template}}` placeholders with AI-generated values |
 | `POST` | `/api/prompt` | Generic single-turn prompt |
 | `WS`   | `/ws` | WebSocket multiplex interface |
 
 ### `POST /api/fill-template`
+
+Fills TEMPLATE VARIABLES (`{{varName}}`) with AI-generated values based on the user request.
 
 ```json
 {
@@ -232,6 +246,8 @@ Response:
   }
 }
 ```
+
+Note: EXTRACTED VARIABLES (`[[extracted.varName]]`) are resolved at runtime during playback; they are not sent to the AI server.
 
 ---
 
