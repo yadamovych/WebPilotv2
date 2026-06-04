@@ -10,6 +10,34 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {
     // API unavailable in older Chrome versions — gracefully ignore.
   });
+
+  // Context menu items — shown on every page element.
+  // Two entries: one to extract text/value into a new {{variable}},
+  // one to fill the element with an existing variable.
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id:       'webpilot-extract',
+      title:    'WebPilot: Extract as variable…',
+      contexts: ['all'],
+    });
+    chrome.contextMenus.create({
+      id:       'webpilot-fill',
+      title:    'WebPilot: Fill with variable…',
+      contexts: ['all'],
+    });
+  });
+});
+
+// Forward context-menu clicks to the content script of the active tab.
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (!tab?.id) return;
+  const mode = info.menuItemId === 'webpilot-extract' ? 'extract' : 'fill';
+  chrome.tabs.sendMessage(tab.id, {
+    type: 'SHOW_EXTRACT_MODAL',
+    mode,
+    // selectionText is populated by Chrome when text is highlighted
+    selectionText: info.selectionText ?? '',
+  }).catch(() => {});
 });
 
 /** @type {{ recording: boolean, recordingTabId: number|null, steps: object[] }} */
@@ -33,6 +61,14 @@ const DEFAULT_SERVER_URL = 'http://localhost:8000';
 // Chrome suspends the SW mid-recording.
 // ---------------------------------------------------------------------------
 (async () => {
+  try {
+    // Allow content scripts to read/write chrome.storage.session (needed for
+    // extract step results to be stored by the content script and read back
+    // by the background during playback).
+    await chrome.storage.session.setAccessLevel({
+      accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS',
+    });
+  } catch (_) { /* older Chrome — ignore */ }
   try {
     const { recordingState } = await chrome.storage.session.get('recordingState');
     if (recordingState) {
@@ -135,6 +171,57 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 });
 
 // ---------------------------------------------------------------------------
+// Auto-record navigate steps when switching tabs during recording
+// ---------------------------------------------------------------------------
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  if (!STATE.recording) return;
+  
+  // If switching to a different tab while recording, add navigate step
+  if (tabId !== STATE.recordingTabId) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      const url = tab?.url;
+      
+      // Skip restricted URLs (chrome://, about:, extension pages, etc.)
+      if (!url || 
+          url.startsWith('chrome') || 
+          url.startsWith('about:') || 
+          url.startsWith('edge:') ||
+          url.startsWith('data:')) {
+        return;
+      }
+      
+      // Add navigate step to record the tab switch
+      const label = `Navigate to ${url}`;
+      STATE.steps.push({
+        action: 'navigate',
+        value: url,
+        label,
+        description: label,
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        auto: true, // Mark as auto-generated
+      });
+      
+      console.log(`[WebPilot] Auto-recorded navigate step to: ${url}`);
+      
+      // Notify popup that steps have changed
+      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
+      
+      // Update recording tab to the new tab
+      STATE.recordingTabId = tabId;
+      persistState();
+      
+      // Ensure content script is present and start recording on the new tab
+      await ensureContentScript(tabId);
+      await broadcastToFrames(tabId, { type: 'START_RECORDING' });
+    } catch (err) {
+      console.warn('[WebPilot] Error handling tab switch during recording:', err);
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Recording
 // ---------------------------------------------------------------------------
 async function handleStartRecording(tabId, { noAutoNavigate = false } = {}) {
@@ -192,9 +279,14 @@ async function handleStartRecording(tabId, { noAutoNavigate = false } = {}) {
 
 async function handleStopRecording() {
   try {
-    if (STATE.recordingTabId) {
-      await broadcastToFrames(STATE.recordingTabId, { type: 'STOP_RECORDING' }).catch(() => {});
-    }
+    // Broadcast STOP_RECORDING to ALL tabs — not just the original recording
+    // tab — because other tabs may have joined the recording session via the
+    // visibilitychange GET_STATE check and now show the recording overlay.
+    const tabs = await chrome.tabs.query({}).catch(() => []);
+    const stopPromises = (tabs || []).map((t) =>
+      broadcastToFrames(t.id, { type: 'STOP_RECORDING' }).catch(() => {})
+    );
+    await Promise.allSettled(stopPromises);
   } finally {
     STATE.recording = false;
     STATE.recordingTabId = null;
@@ -204,7 +296,14 @@ async function handleStopRecording() {
 }
 
 function handleRecordAction(action, tabId, sendResponse) {
-  if (STATE.recording && tabId === STATE.recordingTabId) {
+  // Allow recording from the active recording tab.  Also allow explicit
+  // extract / fill actions from ANY tab — the user triggered these
+  // intentionally via the context menu, possibly on a different tab.
+  const isExplicitAction = action.action === 'extract' ||
+    (action.action === 'type' && /^\{\{.+\}\}$/.test(action.value));
+  const tabAllowed = tabId === STATE.recordingTabId || isExplicitAction;
+
+  if (STATE.recording && tabAllowed) {
     const last = STATE.steps[STATE.steps.length - 1];
     const now = Date.now();
 
@@ -301,10 +400,23 @@ async function handlePlayTemplate(templateId, userRequest, tabId) {
       tabId = tab.id;
     }
 
-    // Ask the AI server to fill template variables (before navigation so we don't
-    // lose the current context)
+    // Ask the AI server to fill TEMPLATE VARIABLES (before navigation so we don't lose context)
     const variables = await fillTemplateVariables(template, userRequest);
-    const resolvedSteps = substituteVariables(template.steps, variables);
+    
+    // Collect EXTRACTED VARIABLES from session storage
+    const extractedVariables = {};
+    try {
+      const sessionItems = await chrome.storage.session.get(null);
+      for (const [key, value] of Object.entries(sessionItems || {})) {
+        if (key.startsWith('extracted_')) {
+          const varName = key.replace('extracted_', '');
+          extractedVariables[varName] = value;
+        }
+      }
+    } catch (_) {}
+    
+    // Substitute both TEMPLATE and EXTRACTED variables
+    const resolvedSteps = substituteVariables(template.steps, variables, extractedVariables);
 
     // If the current tab is a restricted page (edge://, chrome://, about:, …),
     // we can't inject a content script into it.  However, if the first step is a
@@ -359,21 +471,64 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
 
     STATE.playback.currentIndex = i;
 
+    // Resolve any remaining placeholders from extracted values at runtime:
+    // 1. TEMPLATE VARIABLES {{var}} from AI (pre-filled in handlePlayTemplate)
+    // 2. EXTRACTED VARIABLES [[extracted.var]] from page/DOM extraction (resolved at each step)
+    let currentStep = steps[i];
+    if (currentStep.value && (/\{\{\w+\}\}/.test(currentStep.value) || /\[\[extracted\.\w+\]\]/.test(currentStep.value))) {
+      try {
+        const sessionItems = await chrome.storage.session.get(null);
+        let resolved = currentStep.value;
+        let resolved_count = 0;
+        
+        // Resolve [[extracted.varName]] from session storage (values stored by previous extract steps)
+        if (/\[\[extracted\.\w+\]\]/.test(resolved)) {
+          for (const [key, val] of Object.entries(sessionItems || {})) {
+            if (key.startsWith('extracted_')) {
+              const varName = key.replace('extracted_', '');
+              const pattern = `[[extracted.${varName}]]`;
+              if (resolved.includes(pattern)) {
+                const before = resolved;
+                resolved = resolved.replaceAll(pattern, String(val ?? ''));
+                if (resolved !== before) {
+                  resolved_count++;
+                  console.log(`[WebPilot] Resolved [[extracted.${varName}]] → "${String(val).substring(0, 40)}"`);
+                }
+              }
+            }
+          }
+        }
+        
+        if (resolved !== currentStep.value) {
+          currentStep = { ...currentStep, value: resolved };
+          console.log(`[WebPilot] Step ${i}: resolved ${resolved_count} extracted variables`);
+        }
+      } catch (err) {
+        console.warn('[WebPilot] Error resolving step value placeholders:', err);
+      }
+    }
+
     // Broadcast progress to popup (may be closed — ignore errors)
     chrome.runtime.sendMessage({
       type: 'PLAYBACK_PROGRESS',
       currentIndex: i,
       total: steps.length,
-      step: steps[i],
+      step: currentStep,
     }).catch(() => {});
 
     const MAX_RETRIES = 3;
     const RETRY_DELAY_MS = 1000;
     let result;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      if (attempt === 1) {
+        console.log(`[WebPilot] Executing step ${i + 1}/${steps.length}: ${currentStep.action}${currentStep.selector ? ` (${currentStep.selector})` : ''}${currentStep.variable ? ` -> [[extracted.${currentStep.variable}]]` : ''}`);
+      } else {
+        console.log(`[WebPilot] Retrying step ${i + 1} (attempt ${attempt}/${MAX_RETRIES})`);
+      }
+      
       result = await chrome.tabs.sendMessage(tabId, {
         type: 'EXECUTE_STEP',
-        step: steps[i],
+        step: currentStep,
         index: i,
         total: steps.length,
         devMode,
@@ -385,7 +540,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
           type: 'PLAYBACK_PROGRESS',
           currentIndex: i,
           total: steps.length,
-          step: steps[i],
+          step: currentStep,
           retryAttempt: attempt,
           retryMax: MAX_RETRIES,
         }).catch(() => {});
@@ -397,16 +552,40 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
       throw new Error(`Step ${i + 1} failed after ${MAX_RETRIES} attempts: ${result.error}`);
     }
 
+    // If the step extracted a variable, persist it in session storage from the
+    // background (trusted context) so later steps can resolve [[extracted.var]] reliably.
+    if (result?.extracted) {
+      const storageItems = {};
+      for (const [varName, val] of Object.entries(result.extracted)) {
+        // Only store non-empty extracted values to avoid overwriting good values with empty extractions
+        const valStr = String(val).trim();
+        if (valStr.length > 0) {
+          storageItems[`extracted_${varName}`] = val;
+          console.log(`[WebPilot] Storing extracted variable: ${varName} = ${valStr.substring(0, 50)}`);
+        } else {
+          console.warn(`[WebPilot] Skipping empty extracted value for: ${varName}`);
+        }
+      }
+      
+      if (Object.keys(storageItems).length > 0) {
+        try { 
+          await chrome.storage.session.set(storageItems);
+        } catch (err) {
+          console.error('[WebPilot] Failed to store extracted variables:', err);
+        }
+      }
+    }
+
     // After a navigate step the page unloads — wait for it to fully reload
     // then re-inject the content script before executing further steps.
-    if (steps[i].action === 'navigate') {
+    if (currentStep.action === 'navigate') {
       await waitForTabLoad(tabId);
       await ensureContentScript(tabId);
       // Small settling delay for SPAs that render after the load event
       await delay(300);
     } else {
       // Per-step delay (default 600 ms if not set)
-      await delay(steps[i].delayMs ?? 600);
+      await delay(currentStep.delayMs ?? 600);
     }
   }
 }
@@ -415,55 +594,112 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
 // AI variable resolution
 // ---------------------------------------------------------------------------
 async function fillTemplateVariables(template, userRequest) {
-  // Extract {{varName}} placeholders from all step values
-  const variableNames = new Set();
-  const varRe = /\{\{(\w+)\}\}/g;
+  // Extract TEMPLATE VARIABLES: {{varName}} placeholders from all step values
+  // These are for AI generation only.
+  const templateVariableNames = new Set();
+  const templateVarRe = /\{\{(\w+)\}\}/g;
   for (const step of template.steps) {
     if (step.value) {
-      for (const [, name] of step.value.matchAll(varRe)) {
-        variableNames.add(name);
+      for (const [, name] of step.value.matchAll(templateVarRe)) {
+        templateVariableNames.add(name);
       }
     }
   }
 
-  if (variableNames.size === 0) return {};
+  if (templateVariableNames.size === 0) return {};
 
-  const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
-  const serverUrl = serverConfig.url ?? DEFAULT_SERVER_URL;
+  // ---------------------------------------------------------------------------
+  // Check for variables already extracted during a previous recording/playback
+  // session (stored in chrome.storage.session by the content script).
+  // Also collect variables that will be produced by extract steps in THIS
+  // template — those don't need AI filling since they'll be resolved at runtime.
+  // ---------------------------------------------------------------------------
+  const extractedFromStorage = {};
+  try {
+    const sessionItems = await chrome.storage.session.get(null);
+    for (const [key, value] of Object.entries(sessionItems || {})) {
+      if (key.startsWith('extracted_')) {
+        const varName = key.replace('extracted_', '');
+        if (templateVariableNames.has(varName)) {
+          extractedFromStorage[varName] = value;
+        }
+      }
+    }
+  } catch (_) {}
 
-  const response = await fetch(`${serverUrl}/api/fill-template`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      userRequest,
-      variables: Array.from(variableNames),
-      templateName: template.name,
-      templateDescription: template.description ?? '',
-      backend: serverConfig.backend ?? 'groq',
-      // API key is sent only when the user has opted to pass it from the extension.
-      // For production deployments, configure keys server-side via environment variables
-      // and omit apiKey here.
-      apiKey: serverConfig.apiKey ?? '',
-      model: serverConfig.model ?? '',
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail ?? `Server error ${response.status}`);
+  // Variables produced by extract steps in this template — they will be
+  // resolved at runtime, so we should NOT ask the AI for them.
+  const extractStepVars = new Set();
+  for (const step of template.steps) {
+    if (step.action === 'extract' && step.variable) {
+      extractStepVars.add(step.variable);
+    }
   }
 
-  const data = await response.json();
-  return data.variables ?? {};
+  // Determine which TEMPLATE VARIABLES still need AI resolution
+  const needsAI = Array.from(templateVariableNames).filter(
+    (v) => !(v in extractedFromStorage) && !extractStepVars.has(v)
+  );
+
+  let aiVariables = {};
+  if (needsAI.length > 0) {
+    const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
+    const serverUrl = serverConfig.url ?? DEFAULT_SERVER_URL;
+
+    const response = await fetch(`${serverUrl}/api/fill-template`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userRequest,
+        variables: needsAI,
+        templateName: template.name,
+        templateDescription: template.description ?? '',
+        backend: serverConfig.backend ?? 'groq',
+        apiKey: serverConfig.apiKey ?? '',
+        model: serverConfig.model ?? '',
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail ?? `Server error ${response.status}`);
+    }
+
+    const data = await response.json();
+    aiVariables = data.variables ?? {};
+  }
+
+  // Merge: extracted values take precedence over AI-generated ones.
+  // Extract-step vars are left as {{var}} — they'll be resolved at runtime.
+  return { ...aiVariables, ...extractedFromStorage };
 }
 
-function substituteVariables(steps, variables) {
+/**
+ * Substitute both {{variable}} (template/AI) and [[extracted.variable]] (DOM/page extraction)
+ * placeholders with their resolved values.
+ * 
+ * TEMPLATE VARIABLES {{varName}}: AI-generated values
+ * EXTRACTED VARIABLES [[extracted.varName]]: Values from page/DOM extraction
+ */
+function substituteVariables(steps, variables, extractedVariables = {}) {
   return steps.map((step) => {
     if (!step.value) return step;
     let value = step.value;
+    
+    // Replace TEMPLATE VARIABLES {{varName}} with AI-generated values
     for (const [key, val] of Object.entries(variables)) {
-      value = value.replaceAll(`{{${key}}}`, val);
+      if (val !== null && val !== undefined) {
+        value = value.replaceAll(`{{${key}}}`, String(val));
+      }
     }
+    
+    // Replace EXTRACTED VARIABLES [[extracted.varName]] with page/DOM values
+    for (const [key, val] of Object.entries(extractedVariables)) {
+      if (val !== null && val !== undefined) {
+        value = value.replaceAll(`[[extracted.${key}]]`, String(val));
+      }
+    }
+    
     return { ...step, value };
   });
 }

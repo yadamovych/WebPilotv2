@@ -17,11 +17,48 @@
   if (window.__webpilotLoaded) return;
   window.__webpilotLoaded = true;
 
+  // ---------------------------------------------------------------------------
+  // Extension context guard
+  // ---------------------------------------------------------------------------
+  // Chrome throws "Extension context invalidated" on all chrome.* calls after
+  // the extension is reloaded/updated while the content script is still live.
+  // safeSend() absorbs those errors and cleanly tears down recording state.
+
+  function handleContextInvalidated() {
+    try { stopRecording(); } catch (_) {}
+  }
+
+  function safeSend(msg, cb) {
+    if (!chrome.runtime?.id) {
+      handleContextInvalidated();
+      if (cb) cb(undefined);
+      return;
+    }
+    try {
+      chrome.runtime.sendMessage(msg, (res) => {
+        if (chrome.runtime.lastError) { /* SW waking up or gone — ignore */ }
+        if (cb) cb(res);
+      });
+    } catch (e) {
+      handleContextInvalidated();
+      if (cb) cb(undefined);
+    }
+  }
+
+  function safeStorageSet(items) {
+    if (!chrome.runtime?.id) return;
+    try { chrome.storage.session.set(items).catch(() => {}); } catch (_) {}
+  }
+
+  function safeStorageGet(keys, cb) {
+    if (!chrome.runtime?.id) { cb({}); return; }
+    try { chrome.storage.session.get(keys, cb); } catch (_) { cb({}); }
+  }
+
   // If recording was already active when this frame loaded (e.g. a TinyMCE
   // iframe that opened after broadcastToFrames was already called), join the
   // session immediately so input events are captured.
-  chrome.runtime.sendMessage({ type: 'GET_STATE' }, (res) => {
-    if (chrome.runtime.lastError) return; // background not ready yet
+  safeSend({ type: 'GET_STATE' }, (res) => {
     if (res?.state?.recording) startRecording();
   });
 
@@ -31,11 +68,8 @@
       stopRecording();
     } else {
       // Check recording state when tab becomes visible again
-      chrome.runtime.sendMessage({ type: 'GET_STATE' }, (res) => {
-        if (chrome.runtime.lastError) return;
-        if (res?.state?.recording && !isRecording) {
-          startRecording();
-        }
+      safeSend({ type: 'GET_STATE' }, (res) => {
+        if (res?.state?.recording && !isRecording) startRecording();
       });
     }
   });
@@ -53,10 +87,18 @@
   // Map<variableName, value> — extracted values from elements during playback
   const extractedValues = new Map();
 
+  // The element that was most recently right-clicked (tracked globally so the
+  // native context-menu → SHOW_EXTRACT_MODAL path can find it).
+  let lastRightClickedEl = null;
+  document.addEventListener('contextmenu', (e) => {
+    if (isWebPilotEl(e.target)) return;
+    lastRightClickedEl = e.target;
+  }, true); // capture phase so it runs even when recording handler calls preventDefault
+
   // Store extracted values in chrome.storage for cross-frame/page access
   function storeExtractedValue(varName, value) {
     extractedValues.set(varName, value);
-    chrome.storage.session.set({ [`extracted_${varName}`]: value }).catch(() => {});
+    safeStorageSet({ [`extracted_${varName}`]: value });
   }
 
   function getExtractedValue(varName) {
@@ -72,15 +114,10 @@
     const extracted = Array.from(extractedValues.entries());
     
     // Also get recorded extract steps from background (for recording phase variables)
-    chrome.runtime.sendMessage({ type: 'GET_STATE' }, (res) => {
-      if (chrome.runtime.lastError) {
-        callback(extracted);
-        return;
-      }
-      
+    safeSend({ type: 'GET_STATE' }, (res) => {
       const steps = res?.state?.steps || [];
       const extractSteps = steps.filter(step => step.action === 'extract');
-      
+
       // Combine: show extracted values first, then recorded variables with 'pending' prefix
       const combined = [
         ...extracted,
@@ -88,13 +125,13 @@
           .filter(step => !extractedValues.has(step.variable))
           .map(step => [step.variable, null]) // null value = not yet extracted
       ];
-      
+
       callback(combined);
     });
   }
 
   // Load extracted values from storage on initialization
-  chrome.storage.session.get(null, (items) => {
+  safeStorageGet(null, (items) => {
     Object.entries(items || {}).forEach(([key, value]) => {
       if (key.startsWith('extracted_')) {
         const varName = key.replace('extracted_', '');
@@ -107,28 +144,46 @@
   function extractFromElement(selector, extractType = 'text') {
     if (!selector) return '';
     const el = document.querySelector(selector);
-    if (!el) return '';
-
-    if (extractType === 'value') {
-      // Get value from input/textarea
-      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-        return el.value || '';
-      }
-      // Try data attributes
-      if (el.hasAttribute('data-value')) {
-        return el.getAttribute('data-value') || '';
-      }
-      return el.textContent?.trim() || '';
+    const matchCount = document.querySelectorAll(selector).length;
+    if (!el) {
+      console.warn(`[WebPilot] Selector "${selector}" matched 0 elements`);
+      return '';
     }
 
-    // Default: extract text content
-    if (el.isContentEditable) {
-      return el.textContent?.trim() || '';
+    try {
+      if (extractType === 'value') {
+        // Get value from input/textarea
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+          const val = String(el.value || '');
+          console.log(`[WebPilot] Extract by value from ${selector}: matched ${matchCount} element(s), got: "${val.substring(0, 50)}${val.length > 50 ? '...' : ''}"`);
+          return val;
+        }
+        // Try data attributes
+        if (el.hasAttribute('data-value')) {
+          const val = String(el.getAttribute('data-value') || '');
+          console.log(`[WebPilot] Extract data-value from ${selector}: matched ${matchCount} element(s), got: "${val.substring(0, 50)}${val.length > 50 ? '...' : ''}"`);
+          return val;
+        }
+        const val = String(el.textContent?.trim() || '');
+        console.log(`[WebPilot] Extract textContent from ${selector}: matched ${matchCount} element(s), got: "${val.substring(0, 50)}${val.length > 50 ? '...' : ''}"`);
+        return val;
+      }
+
+      // Default: extract text content
+      let val;
+      if (el.isContentEditable) {
+        val = String(el.textContent?.trim() || '');
+      } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        val = String(el.value || '');
+      } else {
+        val = String(el.textContent?.trim() || '');
+      }
+      console.log(`[WebPilot] Extract text from ${selector}: matched ${matchCount} element(s), got: "${val.substring(0, 50)}${val.length > 50 ? '...' : ''}"`);
+      return val;
+    } catch (err) {
+      console.warn(`[WebPilot] Error extracting from ${selector}:`, err);
+      return '';
     }
-    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-      return el.value || '';
-    }
-    return el.textContent?.trim() || '';
   }
 
   // ---------------------------------------------------------------------------
@@ -155,7 +210,10 @@
   // ---------------------------------------------------------------------------
   // Message listener (from background)
   // ---------------------------------------------------------------------------
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  // Wrap in try/catch so a stale listener on an invalidated context doesn't
+  // surface as an uncaught error to the page.
+  try {
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     switch (message.type) {
       case 'START_RECORDING':
         startRecording();
@@ -199,10 +257,21 @@
         sendResponse({ success: true });
         break;
 
+      case 'SHOW_EXTRACT_MODAL': {
+        // Triggered by the browser's native context menu ("WebPilot: Extract…" /
+        // "WebPilot: Fill…").  Use the element stored by the capture-phase
+        // contextmenu listener; fall back to document.body if nothing was stored.
+        const target = lastRightClickedEl || document.body;
+        showExtractModal(target, message.mode ?? 'extract');
+        sendResponse({ success: true });
+        break;
+      }
+
       default:
         sendResponse({ error: `Unknown type: ${message.type}` });
     }
   });
+  } catch (_) { /* extension context was invalidated before listener could be added */ }
 
   // ---------------------------------------------------------------------------
   // Recording — start / stop (continuous mode)
@@ -336,22 +405,34 @@
       .wp-extract-panel {
         background: #fff; border-radius: 8px;
         box-shadow: 0 10px 40px rgba(0,0,0,.3);
-        width: 90%; max-width: 360px;
+        width: 90%; max-width: 380px;
         overflow: hidden;
       }
       .wp-extract-header {
         display: flex; align-items: center; justify-content: space-between;
-        padding: 12px 16px;
+        padding: 4px 12px 0;
         border-bottom: 1px solid #e5e7eb;
-        font: 700 14px/1.4 inherit;
       }
+      .wp-extract-tabs {
+        display: flex; gap: 0;
+      }
+      .wp-tab-btn {
+        background: none; border: none; border-bottom: 2.5px solid transparent;
+        padding: 10px 14px; font: 600 13px/1.4 inherit; cursor: pointer;
+        color: #6b7280; transition: color .15s, border-color .15s;
+      }
+      .wp-tab-btn:hover { color: #111; }
+      .wp-tab-btn.wp-tab-active { color: #2563eb; border-bottom-color: #2563eb; }
       .wp-extract-close {
-        background: none; border: none; font-size: 24px;
+        background: none; border: none; font-size: 22px;
         cursor: pointer; color: #6b7280;
         padding: 0; width: 28px; height: 28px;
         display: flex; align-items: center; justify-content: center;
+        margin-left: 4px;
       }
       .wp-extract-close:hover { color: #111; }
+      .wp-tab-pane { display: none; }
+      .wp-tab-pane.wp-tab-pane-active { display: block; }
       .wp-extract-body {
         padding: 14px 16px;
         display: flex; flex-direction: column; gap: 12px;
@@ -360,7 +441,7 @@
         display: flex; flex-direction: column; gap: 4px;
       }
       .wp-extract-label {
-        font-size: 12px; font-weight: 600; color: #4b5563;
+        font-size: 11px; font-weight: 600; color: #4b5563;
         text-transform: uppercase; letter-spacing: 0.3px;
       }
       .wp-extract-var-input {
@@ -372,17 +453,38 @@
         outline: none; border-color: #3b82f6;
       }
       .wp-extract-type-group {
-        display: flex; flex-direction: column; gap: 6px;
+        display: flex; gap: 16px;
       }
       .wp-extract-radio {
-        display: flex; align-items: center; gap: 6px;
+        display: flex; align-items: center; gap: 5px;
         cursor: pointer; font-size: 13px; user-select: none;
       }
-      .wp-extract-radio input[type="radio"] {
-        cursor: pointer;
+      .wp-extract-radio input[type="radio"] { cursor: pointer; }
+      .wp-tip {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 15px; height: 15px; border-radius: 50%;
+        background: #e5e7eb; color: #6b7280;
+        font-size: 10px; font-weight: 700; font-style: normal;
+        cursor: default; flex-shrink: 0; position: relative;
+        margin-left: 1px;
       }
+      .wp-tip::after {
+        content: attr(data-tip);
+        display: none;
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%; transform: translateX(-50%);
+        background: #1e293b; color: #f1f5f9;
+        font-size: 11px; font-weight: 400; line-height: 1.5;
+        padding: 6px 9px; border-radius: 5px;
+        white-space: normal; width: 210px;
+        box-shadow: 0 4px 12px rgba(0,0,0,.25);
+        pointer-events: none; z-index: 10;
+        text-align: left;
+      }
+      .wp-tip:hover::after { display: block; }
       .wp-extract-footer {
-        display: flex; gap: 8px; padding: 12px 16px;
+        display: flex; gap: 8px; padding: 10px 16px;
         border-top: 1px solid #e5e7eb;
         justify-content: flex-end;
       }
@@ -397,44 +499,35 @@
       }
       .wp-extract-btn-cancel:hover { background: #e5e7eb; }
       .wp-extract-btn-extract {
-        background: #3b82f6; color: #fff;
+        background: #2563eb; color: #fff;
       }
-      .wp-extract-btn-extract:hover { background: #2563eb; }
-      
-      /* Extracted variables list */
+      .wp-extract-btn-extract:hover { background: #1d4ed8; }
+
+      /* Variable list (Fill tab) */
       .wp-extract-vars-list {
         display: flex; flex-direction: column; gap: 6px;
+        max-height: 200px; overflow-y: auto;
       }
       .wp-extract-var-btn {
         display: flex; align-items: center; justify-content: space-between;
         padding: 8px 10px; background: #f0f9ff; border: 1.5px solid #bfdbfe;
         border-radius: 4px; cursor: pointer; text-align: left;
-        font-size: 12px; transition: all .15s;
+        font-size: 12px; transition: all .15s; width: 100%;
       }
-      .wp-extract-var-btn:hover {
-        background: #e0f2fe; border-color: #7dd3fc;
-      }
+      .wp-extract-var-btn:hover { background: #dbeafe; border-color: #93c5fd; }
       .wp-var-name {
-        font-weight: 600; color: #0369a1; font-family: monospace;
+        font-weight: 600; color: #1e40af; font-family: monospace;
         flex-shrink: 0; margin-right: 8px;
       }
       .wp-var-value {
         color: #64748b; font-size: 11px; flex: 1;
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      }
-      .wp-extract-divider {
-        display: flex; align-items: center; gap: 8px;
-        color: #9ca3af; font-size: 12px; font-weight: 500;
-        margin: 4px 0;
-      }
-      .wp-extract-divider::before,
-      .wp-extract-divider::after {
-        content: ''; flex: 1; height: 1px; background: #d1d5db;
+        text-align: right;
       }
       .wp-no-vars {
         display: block; text-align: center;
-        padding: 12px 8px; color: #9ca3af; font-size: 12px;
-        font-style: italic;
+        padding: 16px 8px; color: #9ca3af; font-size: 12px;
+        font-style: italic; background: #f9fafb; border-radius: 4px;
       }
 
     `;
@@ -568,7 +661,7 @@
         } else {
           // Fallback: record as a plain click
           const name = label || labelFromSelector(selector);
-          chrome.runtime.sendMessage({
+          safeSend({
             type: 'RECORD_ACTION',
             action: { action: 'click', selector, label: name, description: name },
           });
@@ -628,7 +721,7 @@
         }
         const lbl = getLabel(targetEl) || labelFromSelector(sel);
         flashRecorded(optionEl);
-        chrome.runtime.sendMessage({
+        safeSend({
           type: 'RECORD_ACTION',
           action: {
             action: 'select',
@@ -646,7 +739,7 @@
     flashRecorded(el);
 
     const name = label || labelFromSelector(selector);
-    chrome.runtime.sendMessage({
+    safeSend({
       type: 'RECORD_ACTION',
       action: { action: 'click', selector, label: name, description: name, elementHint: elementHint(el) },
     });
@@ -664,7 +757,7 @@
     const label = getLabel(el) || labelFromSelector(selector);
     // Derive a {{variableName}} suggestion from the field label
     const suggestedVar = labelToVarName(label);
-    chrome.runtime.sendMessage({
+    safeSend({
       type: 'RECORD_ACTION',
       action: {
         action: 'type',
@@ -739,7 +832,7 @@
       const selector = buildSelector(el);
       const value = el.value;
       const label = getLabel(el) || labelFromSelector(selector);
-      chrome.runtime.sendMessage({
+      safeSend({
         type: 'RECORD_ACTION',
         action: { action: 'select', selector, value, label, description: label, elementHint: elementHint(el) },
       });
@@ -757,7 +850,7 @@
       }
       const value = (el.value ?? el.textContent ?? '').trim();
       const label = getLabel(el) || labelFromSelector(selector);
-      chrome.runtime.sendMessage({
+      safeSend({
         type: 'RECORD_ACTION',
         action: { action: 'select', selector, value, label, description: label, elementHint: elementHint(el) },
       });
@@ -778,15 +871,15 @@
 
   function onRecordingContextMenu(e) {
     if (!isRecording) return;
-    
     const targetEl = e.target;
     if (isWebPilotEl(targetEl)) return;
-    
-    e.preventDefault();
-    showExtractModal(targetEl);
+    // Do NOT preventDefault — let the native browser menu open.
+    // The "WebPilot: Extract…" / "WebPilot: Fill…" items are registered via
+    // chrome.contextMenus in the background script and will trigger
+    // SHOW_EXTRACT_MODAL when clicked.
   }
 
-  function showExtractModal(targetEl) {
+  function showExtractModal(targetEl, initialMode = 'extract') {
     // Remove any existing modal
     const existingModal = document.getElementById('webpilot-extract-modal');
     if (existingModal) existingModal.remove();
@@ -797,6 +890,8 @@
     // Get all available variables (extracted + recorded extract steps)
     getAvailableVariablesForFilling((availableVars) => {
       const hasVars = availableVars.length > 0;
+      // Start on Fill tab when requested AND variables exist; otherwise Extract
+      const startTab = (initialMode === 'fill' && hasVars) ? 'fill' : 'extract';
 
       const modal = document.createElement('div');
       modal.id = 'webpilot-extract-modal';
@@ -804,46 +899,54 @@
         <div class="wp-extract-overlay">
           <div class="wp-extract-panel">
             <div class="wp-extract-header">
-              <span>Extract or Fill Element</span>
-              <button class="wp-extract-close" type="button">×</button>
+              <div class="wp-extract-tabs">
+                <button class="wp-tab-btn${startTab === 'extract' ? ' wp-tab-active' : ''}" data-tab="extract">Extract variable</button>
+                <button class="wp-tab-btn${startTab === 'fill'    ? ' wp-tab-active' : ''}" data-tab="fill">Fill with variable</button>
+              </div>
+              <button class="wp-extract-close" type="button" aria-label="Close">×</button>
             </div>
-            <div class="wp-extract-body">
-              <div class="wp-extract-field">
-                <label class="wp-extract-label">Use Existing Variable</label>
-                <div class="wp-extract-vars-list">
-                  ${hasVars 
-                    ? availableVars.map(([varName, value]) => `
-                      <button class="wp-extract-var-btn" type="button" data-var="${varName}">
-                        <span class="wp-var-name">{{${varName}}}</span>
-                        <span class="wp-var-value">${value === null ? '(pending extraction)' : (value ?? '').slice(0, 30)}</span>
-                      </button>
-                    `).join('')
-                    : '<span class="wp-no-vars">No variables defined yet</span>'
-                  }
+
+            <!-- EXTRACT TAB -->
+            <div class="wp-tab-pane${startTab === 'extract' ? ' wp-tab-pane-active' : ''}" data-pane="extract">
+              <div class="wp-extract-body">
+                <div class="wp-extract-field">
+                  <label class="wp-extract-label">Variable name</label>
+                  <input class="wp-extract-var-input" type="text" placeholder="e.g., product_title" value="${suggestedVarName}" />
+                </div>
+                <div class="wp-extract-field">
+                  <label class="wp-extract-label">Extract type</label>
+                  <div class="wp-extract-type-group">
+                    <label class="wp-extract-radio"><input type="radio" name="extractType" value="text" checked /><span>Text content</span><span class="wp-tip" data-tip="Reads the visible text rendered inside any element — &lt;div&gt;, &lt;span&gt;, &lt;p&gt;, &lt;button&gt;, etc.">?</span></label>
+                    <label class="wp-extract-radio"><input type="radio" name="extractType" value="value" /><span>Input value</span><span class="wp-tip" data-tip="Reads the typed or selected value from a form control — &lt;input&gt;, &lt;textarea&gt;, &lt;select&gt;.">?</span></label>
+                  </div>
                 </div>
               </div>
-              ${hasVars ? '<div class="wp-extract-divider">OR</div>' : ''}
-              <div class="wp-extract-field">
-                <label class="wp-extract-label">Extract New Variable</label>
-                <input class="wp-extract-var-input" type="text" placeholder="e.g., product_title" value="${suggestedVarName}" />
-              </div>
-              <div class="wp-extract-field">
-                <label class="wp-extract-label">Extract Type</label>
-                <div class="wp-extract-type-group">
-                  <label class="wp-extract-radio">
-                    <input type="radio" name="extractType" value="text" checked />
-                    <span>Text Content</span>
-                  </label>
-                  <label class="wp-extract-radio">
-                    <input type="radio" name="extractType" value="value" />
-                    <span>Input Value</span>
-                  </label>
-                </div>
+              <div class="wp-extract-footer">
+                <button class="wp-extract-btn-cancel" type="button">Cancel</button>
+                <button class="wp-extract-btn-extract" type="button">Extract</button>
               </div>
             </div>
-            <div class="wp-extract-footer">
-              <button class="wp-extract-btn-cancel" type="button">Cancel</button>
-              <button class="wp-extract-btn-extract" type="button">${hasVars ? 'Extract New' : 'Extract'}</button>
+
+            <!-- FILL TAB -->
+            <div class="wp-tab-pane${startTab === 'fill' ? ' wp-tab-pane-active' : ''}" data-pane="fill">
+              <div class="wp-extract-body">
+                <div class="wp-extract-field">
+                  <label class="wp-extract-label">Choose EXTRACTED variable to insert</label>
+                  <div class="wp-extract-vars-list">
+                    ${hasVars
+                      ? availableVars.map(([varName, value]) => `
+                        <button class="wp-extract-var-btn" type="button" data-var="${varName}">
+                          <span class="wp-var-name">[[extracted.${varName}]]</span>
+                          <span class="wp-var-value">${value === null ? '(pending extraction)' : String(value ?? '').slice(0, 35)}</span>
+                        </button>`).join('')
+                      : '<span class="wp-no-vars">No variables defined yet — extract one first.</span>'
+                    }
+                  </div>
+                </div>
+              </div>
+              <div class="wp-extract-footer">
+                <button class="wp-extract-btn-cancel" type="button">Cancel</button>
+              </div>
             </div>
           </div>
         </div>
@@ -851,85 +954,78 @@
 
       document.body.appendChild(modal);
 
-      const varInput = modal.querySelector('.wp-extract-var-input');
+      const varInput         = modal.querySelector('.wp-extract-var-input');
       const extractTypeRadios = modal.querySelectorAll('input[name="extractType"]');
-      const btnCancel = modal.querySelector('.wp-extract-btn-cancel');
-      const btnExtract = modal.querySelector('.wp-extract-btn-extract');
-      const closeBtn = modal.querySelector('.wp-extract-close');
+      const closeBtn         = modal.querySelector('.wp-extract-close');
 
-      // Prevent any events inside the modal from bubbling up to recording handlers
-      modal.addEventListener('click', (e) => e.stopPropagation());
-      modal.addEventListener('input', (e) => e.stopPropagation());
+      // Prevent events inside the modal from bubbling up to recording handlers
+      modal.addEventListener('click',  (e) => e.stopPropagation());
+      modal.addEventListener('input',  (e) => e.stopPropagation());
       modal.addEventListener('change', (e) => e.stopPropagation());
+      modal.addEventListener('keydown',(e) => e.stopPropagation());
 
       const cleanup = () => modal.remove();
+
+      // Tab switching
+      modal.querySelectorAll('.wp-tab-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          modal.querySelectorAll('.wp-tab-btn').forEach(b => b.classList.remove('wp-tab-active'));
+          modal.querySelectorAll('.wp-tab-pane').forEach(p => p.classList.remove('wp-tab-pane-active'));
+          btn.classList.add('wp-tab-active');
+          modal.querySelector(`.wp-tab-pane[data-pane="${btn.dataset.tab}"]`).classList.add('wp-tab-pane-active');
+          if (btn.dataset.tab === 'extract') { varInput?.focus(); varInput?.select(); }
+        });
+      });
+
+      closeBtn.addEventListener('click', cleanup);
+      modal.querySelectorAll('.wp-extract-btn-cancel').forEach(b => b.addEventListener('click', cleanup));
+
+      // --- Extract action ---
       const doExtract = () => {
         const varName = varInput.value.trim();
-        if (!varName) {
-          alert('Please enter a variable name');
-          return;
-        }
-
+        if (!varName) { varInput.focus(); varInput.select(); return; }
         const extractType = Array.from(extractTypeRadios).find(r => r.checked)?.value || 'text';
-        const selector = buildSelector(targetEl);
-        const label = getLabel(targetEl) || labelFromSelector(selector);
-        const description = `Extract ${extractType} to {{${varName}}}`;
-
-        chrome.runtime.sendMessage({
+        const selector    = buildSelector(targetEl);
+        const label       = getLabel(targetEl) || labelFromSelector(selector);
+        safeSend({
           type: 'RECORD_ACTION',
-          action: {
-            action: 'extract',
-            selector,
-            variable: varName,
-            extractType,
-            label,
-            description,
-            elementHint: elementHint(targetEl),
-          },
+          action: { action: 'extract', selector, variable: varName, extractType, label,
+                    description: `Extract ${extractType} → {{${varName}}}`,
+                    elementHint: elementHint(targetEl) },
         });
-
         flashRecorded(targetEl);
         cleanup();
       };
+      modal.querySelector('.wp-extract-btn-extract')?.addEventListener('click', doExtract);
+      varInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doExtract();
+        if (e.key === 'Escape') cleanup();
+      });
 
-      btnCancel.addEventListener('click', cleanup);
-      closeBtn.addEventListener('click', cleanup);
-      btnExtract.addEventListener('click', doExtract);
-      
-      // Handle clicking on existing variables to auto-fill
-      const varBtns = modal.querySelectorAll('.wp-extract-var-btn');
-      varBtns.forEach((btn) => {
+      // --- Fill action ---
+      modal.querySelectorAll('.wp-extract-var-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
-          const varName = btn.getAttribute('data-var');
+          const varName  = btn.getAttribute('data-var');
           const selector = buildSelector(targetEl);
-          const label = getLabel(targetEl) || labelFromSelector(selector);
-          const description = `Fill with {{${varName}}}`;
-
-          chrome.runtime.sendMessage({
+          const label    = getLabel(targetEl) || labelFromSelector(selector);
+          safeSend({
             type: 'RECORD_ACTION',
-            action: {
-              action: 'type',
-              selector,
-              value: `{{${varName}}}`,
-              label,
-              description,
-              elementHint: elementHint(targetEl),
-            },
+            action: { action: 'type', selector, value: `[[extracted.${varName}]]`, label,
+                      description: `Fill with [[extracted.${varName}]]`,
+                      elementHint: elementHint(targetEl) },
           });
-
           flashRecorded(targetEl);
           cleanup();
         });
       });
 
-      varInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') doExtract();
-        if (e.key === 'Escape') cleanup();
+      // Keyboard dismiss from overlay background
+      modal.querySelector('.wp-extract-overlay').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) cleanup();
       });
 
-      // Auto-focus and select the input
-      varInput.focus();
-      varInput.select();
+      // Auto-focus
+      if (startTab === 'extract') { varInput?.focus(); varInput?.select(); }
     });
   }
 
@@ -1007,7 +1103,7 @@
     const value = el.value ?? '';
     const label = getLabel(el) || labelFromSelector(selector);
     const suggestedVar = labelToVarName(label);
-    chrome.runtime.sendMessage({
+    safeSend({
       type: 'RECORD_ACTION',
       action: {
         action: 'type',
@@ -1429,7 +1525,10 @@
       const extractedValue = extractFromElement(selector, step.extractType || 'text');
       const varName = step.variable || 'extracted';
       storeExtractedValue(varName, extractedValue);
-      showProgress(index, total, `Extracted "${varName}" = "${extractedValue.substring(0, 50)}${extractedValue.length > 50 ? '...' : ''}"`);
+      const preview = extractedValue.substring(0, 50) + (extractedValue.length > 50 ? '...' : '');
+      const statusMsg = `Extract step ${index + 1}/${total}: [[extracted.${varName}]]${extractedValue ? ` = "${preview}"` : ' (empty)'}`;
+      console.log(`[WebPilot] ${statusMsg}`);
+      showProgress(index, total, statusMsg);
       return { success: true, extracted: { [varName]: extractedValue } };
     }
 
@@ -1482,21 +1581,38 @@
         typeEl.focus();
         await delay(50);
 
-        // Replace {{variableName}} with extracted values
+        // Use the value as-is (it should already be resolved by background.js)
+        // Background resolves both {{template}} and [[extracted.var]] before sending here
         let finalValue = value ?? '';
-        const varMatches = finalValue.match(/{{\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*}}/g) || [];
-        varMatches.forEach((match) => {
-          const varName = match.replace(/[{}\\s]/g, '');
-          const extracted = getExtractedValue(varName);
-          if (extracted !== undefined) {
-            finalValue = finalValue.replace(match, extracted);
-          }
-        });
+        
+        // Fallback: if any [[extracted.varName]] patterns remain, resolve them here
+        const extractedMatches = finalValue.match(/\[\[extracted\.([a-zA-Z_][a-zA-Z0-9_]*)\]\]/g) || [];
+        if (extractedMatches.length > 0) {
+          console.log(`[WebPilot] Content script: resolving ${extractedMatches.length} extracted variables`);
+          extractedMatches.forEach((match) => {
+            try {
+              const varName = match.replace(/[\[\]extracted.]/g, '');
+              const extracted = getExtractedValue(varName);
+              if (extracted !== undefined && extracted !== null) {
+                const extractedStr = String(extracted);
+                console.log(`[WebPilot] Resolved [[extracted.${varName}]] → ${extractedStr.substring(0, 30)}`);
+                finalValue = finalValue.replace(match, extractedStr);
+              } else {
+                console.warn(`[WebPilot] Extracted variable not found or undefined: [[extracted.${varName}]]`);
+              }
+            } catch (err) {
+              console.error(`[WebPilot] Error resolving extracted variable ${match}:`, err);
+            }
+          });
+        }
+        
+        console.log(`[WebPilot] Type action: finalValue type=${typeof finalValue}, length=${String(finalValue).length}`);
+
 
         if (typeEl.isContentEditable) {
           // contenteditable (e.g. Jira rich-text editor, ProseMirror, Quill)
           // Accept HTML for formatting (from AI output) — Jira will render <b>, <ul>, <a>, etc.
-          const htmlValue = finalValue;
+          const htmlValue = String(finalValue ?? '');
           // Select all existing content and replace with typed value
           const selection = window.getSelection();
           const range = document.createRange();
@@ -1504,59 +1620,99 @@
           selection.removeAllRanges();
           selection.addRange(range);
           // Use execCommand for broad framework compatibility
-          document.execCommand('insertHTML', false, htmlValue);
-          // Fallback: set innerHTML if execCommand had no effect
-          if (typeEl.innerHTML !== htmlValue) {
-            typeEl.innerHTML = htmlValue;
+          try {
+            document.execCommand('insertHTML', false, htmlValue);
             typeEl.dispatchEvent(new InputEvent('input', { bubbles: true, data: htmlValue }));
+          } catch (err) {
+            console.warn('[WebPilot] execCommand failed, falling back to innerHTML:', err);
+            try {
+              typeEl.innerHTML = htmlValue;
+              typeEl.dispatchEvent(new InputEvent('input', { bubbles: true, data: htmlValue }));
+            } catch (err2) {
+              console.error('[WebPilot] Failed to set contenteditable value:', err2);
+            }
+          }
+        } else if (typeEl instanceof HTMLSelectElement) {
+          // <select> element
+          try {
+            typeEl.value = String(finalValue ?? '');
+            typeEl.dispatchEvent(new Event('change', { bubbles: true }));
+          } catch (err) {
+            console.error('[WebPilot] Failed to set select value:', err);
           }
         } else {
           // Regular <input> / <textarea>
-          // For constrained input types (number, date, etc.) temporarily relax
-          // the type to 'text' so the browser accepts any string value without
-          // logging a validation warning or silently clearing the field.
-          const CONSTRAINED = ['number','date','datetime-local','time','month','week','range','color'];
-          const savedType = (typeEl instanceof HTMLInputElement && CONSTRAINED.includes(typeEl.type.toLowerCase()))
-            ? typeEl.type : null;
-          if (savedType) { try { typeEl.type = 'text'; } catch (_) {} }
+          try {
+            // For constrained input types (number, date, etc.) temporarily relax
+            // the type to 'text' so the browser accepts any string value
+            const CONSTRAINED = ['number','date','datetime-local','time','month','week','range','color'];
+            const savedType = (typeEl instanceof HTMLInputElement && CONSTRAINED.includes(typeEl.type.toLowerCase()))
+              ? typeEl.type : null;
+            
+            if (savedType) {
+              try { typeEl.type = 'text'; } catch (_) {}
+            }
 
-          const nativeSetter =
-            Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
-            Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-          if (nativeSetter && (typeEl instanceof HTMLInputElement || typeEl instanceof HTMLTextAreaElement)) {
-            nativeSetter.call(typeEl, finalValue ?? '');
-          } else {
-            typeEl.value = finalValue ?? '';
+            // Use native setter for maximum compatibility
+            const nativeSetter =
+              Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
+              Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+            
+            if (nativeSetter && (typeEl instanceof HTMLInputElement || typeEl instanceof HTMLTextAreaElement)) {
+              try {
+                nativeSetter.call(typeEl, String(finalValue ?? ''));
+              } catch (err) {
+                console.warn('[WebPilot] Native setter failed, using direct assignment:', err);
+                typeEl.value = String(finalValue ?? '');
+              }
+            } else {
+              typeEl.value = String(finalValue ?? '');
+            }
+
+            if (savedType) {
+              try { typeEl.type = savedType; } catch (_) {}
+            }
+
+            typeEl.dispatchEvent(new Event('input', { bubbles: true }));
+            typeEl.dispatchEvent(new Event('change', { bubbles: true }));
+          } catch (err) {
+            console.error('[WebPilot] Failed to set input/textarea value:', err);
+            throw new Error(`Failed to type value: ${err.message}`);
           }
-
-          if (savedType) { try { typeEl.type = savedType; } catch (_) {} }
-
-          typeEl.dispatchEvent(new Event('input', { bubbles: true }));
-          typeEl.dispatchEvent(new Event('change', { bubbles: true }));
         }
         break;
       }
 
       case 'select': {
-        if (el.tagName === 'SELECT') {
-          el.value = value;
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-          break;
-        }
+        try {
+          if (el.tagName === 'SELECT') {
+            el.value = String(value ?? '');
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+          }
 
-        // Combobox/listbox widgets (e.g. Jira issue type)
-        await selectComboOption(el, value ?? '');
+          // Combobox/listbox widgets (e.g. Jira issue type)
+          await selectComboOption(el, String(value ?? ''));
+        } catch (err) {
+          console.error('[WebPilot] Failed to select option:', err);
+          throw new Error(`Failed to select: ${err.message}`);
+        }
         break;
       }
 
       case 'key': {
-        const keyName = value ?? 'Enter';
-        const init = { key: keyName, bubbles: true, cancelable: true };
-        el.focus();
-        await delay(50);
-        el.dispatchEvent(new KeyboardEvent('keydown', init));
-        el.dispatchEvent(new KeyboardEvent('keypress', init));
-        el.dispatchEvent(new KeyboardEvent('keyup', init));
+        try {
+          const keyName = String(value ?? 'Enter');
+          const init = { key: keyName, bubbles: true, cancelable: true };
+          el.focus();
+          await delay(50);
+          el.dispatchEvent(new KeyboardEvent('keydown', init));
+          el.dispatchEvent(new KeyboardEvent('keypress', init));
+          el.dispatchEvent(new KeyboardEvent('keyup', init));
+        } catch (err) {
+          console.error('[WebPilot] Failed to dispatch key event:', err);
+          throw new Error(`Failed to dispatch key: ${err.message}`);
+        }
         break;
       }
 

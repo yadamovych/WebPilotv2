@@ -92,7 +92,7 @@ function bindStaticEvents() {
   // Record tab
   dom.btnRecord.addEventListener('click', toggleRecording);
   dom.btnClear.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'CLEAR_STEPS' }).catch(() => {});
+    try { chrome.runtime.sendMessage({ type: 'CLEAR_STEPS' }).catch(() => {}); } catch (_) {}
     state.steps = [];
     renderSteps();
   });
@@ -129,7 +129,7 @@ function bindStaticEvents() {
   });
 
   // Background → popup messages (e.g. live step updates while popup is open)
-  chrome.runtime.onMessage.addListener(onBackgroundMessage);
+  try { chrome.runtime.onMessage.addListener(onBackgroundMessage); } catch (_) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +144,11 @@ function switchTab(name) {
 // Settings
 // ---------------------------------------------------------------------------
 async function loadSettings() {
-  const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
+  let serverConfig = {};
+  try {
+    const result = await chrome.storage.local.get('serverConfig');
+    serverConfig = result.serverConfig ?? {};
+  } catch (_) {}
   dom.serverUrl.value = serverConfig.url ?? 'http://localhost:8000';
   dom.backendSelect.value = serverConfig.backend ?? 'groq';
   dom.apiKey.value = serverConfig.apiKey ?? '';
@@ -410,7 +414,7 @@ function openTemplateEditor(tpl, li) {
   const NO_SELECTOR = new Set(['navigate', 'wait']);
   const NO_VALUE    = new Set(['click']);
   const VAL_PLACEHOLDERS = {
-    type:     'Value or {{variable}}…',
+    type:     'Value, {{template}} (AI), or [[extracted.var]]…',
     select:   'Option text to select…',
     key:      'Key name (Enter, Tab, Escape, Space, Backspace…)',
     navigate: 'URL (https://…)',
@@ -553,6 +557,7 @@ function buildEditorStep(step, index, draft, refresh) {
   const isSelect = step.action === 'select';
   const isKey    = step.action === 'key';
   const isExtract = step.action === 'extract';
+  const isNavigate = step.action === 'navigate';
   const actionBadge = step.action ?? 'action';
   const selectorHint = step.selector ?? '';
   const varName = step.suggestedVar;
@@ -575,7 +580,7 @@ function buildEditorStep(step, index, draft, refresh) {
       ${selectorHint ? `<div class="tpl-selector-chip" title="CSS selector — hover this step to highlight the element on the page"><code>${esc(shortSelector(selectorHint))}</code></div>` : ''}
       ${isType ? `
         <div class="tpl-val-row">
-          <input class="tpl-step-val" type="text" value="${esc(step.value ?? '')}" placeholder="${isDate ? 'Date value or {{var}} (e.g. YYYY-MM-DD)' : 'Value ({{var}} for AI)'}" />
+          <input class="tpl-step-val" type="text" value="${esc(step.value ?? '')}" placeholder="${isDate ? 'Date value or {{template}} or [[extracted.var]] (e.g. YYYY-MM-DD)' : 'Value ({{template}} for AI or [[extracted.var]] for extraction)'}" />
           ${varName && !alreadyVar
             ? `<button class="var-suggest-btn tpl-var-btn" data-var="${esc(varName)}">{{${esc(varName)}}}</button>`
             : ''}
@@ -591,6 +596,12 @@ function buildEditorStep(step, index, draft, refresh) {
         <div class="tpl-val-row">
           <span class="tpl-key-icon" title="Key to press">⌨</span>
           <input class="tpl-step-val" type="text" value="${esc(step.value ?? 'Enter')}" placeholder="Key name (Enter, Tab, Escape, Space…)" />
+        </div>
+      ` : ''}
+      ${isNavigate ? `
+        <div class="tpl-val-row">
+          <span class="tpl-nav-icon" title="URL to navigate to">🔗</span>
+          <input class="tpl-step-val" type="url" value="${esc(step.value ?? '')}" placeholder="https://example.com" />
         </div>
       ` : ''}
       ${isExtract ? `
@@ -654,7 +665,7 @@ function buildEditorStep(step, index, draft, refresh) {
   });
   li.addEventListener('mouseleave', () => {
     if (_hlTab == null) return;
-    chrome.tabs.sendMessage(_hlTab, { type: 'UNHIGHLIGHT_STEP_ELEMENT' }).catch(() => {});
+    try { chrome.tabs.sendMessage(_hlTab, { type: 'UNHIGHLIGHT_STEP_ELEMENT' }).catch(() => {}); } catch (_) {}
     _hlTab = null;
   });
 
@@ -766,13 +777,20 @@ function openPlayPanel(tpl) {
   dom.playStatus.className = 'status-msg hidden';
   dom.userRequest.value = '';
 
-  // Extract {{variable}} names from template steps and show as a hint
-  const vars = new Set();
+  // Extract both TEMPLATE VARIABLES {{var}} and EXTRACTED VARIABLES [[extracted.var]] from steps
+  const templateVars = new Set();
+  const extractedVars = new Set();
   for (const step of tpl.steps ?? []) {
+    // TEMPLATE VARIABLES {{varName}} - for AI generation
     for (const [, name] of (step.value ?? '').matchAll(/\{\{(\w+)\}\}/g)) {
-      vars.add(name);
+      templateVars.add(name);
+    }
+    // EXTRACTED VARIABLES [[extracted.varName]] - from page/DOM extraction
+    for (const [, name] of (step.value ?? '').matchAll(/\[\[extracted\.(\w+)\]\]/g)) {
+      extractedVars.add(name);
     }
   }
+  
   let hint = document.getElementById('play-vars-hint');
   if (!hint) {
     hint = document.createElement('p');
@@ -780,8 +798,18 @@ function openPlayPanel(tpl) {
     hint.className = 'play-vars-hint';
     dom.userRequest.parentElement.after(hint);
   }
-  if (vars.size > 0) {
-    hint.textContent = `⚠ Mention in your prompt: ${[...vars].map(v => `{{${v}}}`).join(', ')}`;
+  
+  let hintText = '';
+  if (templateVars.size > 0) {
+    hintText += `Template variables: ${[...templateVars].map(v => `{{${v}}}`).join(', ')}`;
+  }
+  if (extractedVars.size > 0) {
+    if (hintText) hintText += ' | ';
+    hintText += `Extracted variables: ${[...extractedVars].map(v => `[[extracted.${v}]]`).join(', ')}`;
+  }
+  
+  if (hintText) {
+    hint.textContent = '⚠ ' + hintText + ' — Mention template variables in your prompt';
     hint.classList.remove('hidden');
   } else {
     hint.classList.add('hidden');
@@ -957,7 +985,7 @@ function buildStepItem(step, index) {
     <div class="step-num">${index + 1}</div>
     <div class="step-info">
       <span class="step-action step-action-${esc(step.action ?? 'action')} ${isDate ? 'step-action-date' : ''}">${esc(step.action)}</span>
-      ${isAutoNav ? '<span class="step-auto-badge" title="Auto-recorded start URL">auto</span>' : ''}
+      ${isAutoNav ? '<span class="step-auto-badge" title="Auto-recorded (navigate on start or tab switch)">auto</span>' : ''}
       ${isDate ? '<span class="step-field-badge date-badge" title="Calendar / date field">📅</span>' : ''}
       ${isExtract ? `<span class="step-extract-badge" title="Extract to variable">📋 {{${esc(step.variable ?? 'var')}}}</span>` : ''}
       ${isSelect && step.value ? `<span class="step-select-badge">▾ ${esc(step.value)}</span>` : ''}
@@ -982,13 +1010,13 @@ function buildStepItem(step, index) {
     state.steps[index].description = `Type {{${varName}}} into "${step.label ?? step.selector}"`;
     renderSteps();
     // Persist to background
-    chrome.runtime.sendMessage({ type: 'UPDATE_STEPS', steps: state.steps }).catch(() => {});
+    sendMsgSafe({ type: 'UPDATE_STEPS', steps: state.steps });
   });
 
   li.querySelector('[data-action="edit"]').addEventListener('click', () => editStep(index, li));
   li.querySelector('[data-action="delete"]').addEventListener('click', () => {
     state.steps.splice(index, 1);
-    chrome.runtime.sendMessage({ type: 'UPDATE_STEPS', steps: state.steps }).catch(() => {});
+    sendMsgSafe({ type: 'UPDATE_STEPS', steps: state.steps });
     renderSteps();
   });
 
@@ -1008,7 +1036,7 @@ function buildStepItem(step, index) {
     if (from !== index) {
       const [moved] = state.steps.splice(from, 1);
       state.steps.splice(index, 0, moved);
-      chrome.runtime.sendMessage({ type: 'UPDATE_STEPS', steps: state.steps }).catch(() => {});
+      sendMsgSafe({ type: 'UPDATE_STEPS', steps: state.steps });
       renderSteps();
     }
   });
@@ -1030,7 +1058,7 @@ function editStep(index, liEl) {
     if (a === 'navigate') return 'URL';
     if (a === 'key')      return 'Key';
     if (a === 'select')   return 'Option';
-    return 'Value <span class="label-hint">(use {{var}} for AI placeholders)</span>';
+    return 'Value <span class="label-hint">({{template}} for AI variables or [[extracted.var]] for page extraction)</span>';
   };
   const getValuePlaceholder = (a) => {
     if (a === 'navigate') return 'https://example.com';
@@ -1104,7 +1132,7 @@ function editStep(index, liEl) {
     if (val !== undefined) state.steps[index].value = val;
     if (variable !== undefined) state.steps[index].variable = variable;
     if (extractType !== undefined) state.steps[index].extractType = extractType;
-    chrome.runtime.sendMessage({ type: 'UPDATE_STEPS', steps: state.steps }).catch(() => {});
+    sendMsgSafe({ type: 'UPDATE_STEPS', steps: state.steps });
     renderSteps();
   });
   form.addEventListener('keydown', (e) => {
@@ -1176,10 +1204,21 @@ function onBackgroundMessage(message) {
 // Helpers
 // ---------------------------------------------------------------------------
 function sendMsg(msg) {
-  return chrome.runtime.sendMessage(msg).catch((err) => {
-    console.error('sendMessage error:', err);
-    return null;
-  });
+  if (!chrome.runtime?.id) return Promise.resolve(null);
+  try {
+    return chrome.runtime.sendMessage(msg).catch((err) => {
+      console.error('sendMessage error:', err);
+      return null;
+    });
+  } catch (_) {
+    return Promise.resolve(null);
+  }
+}
+
+/** Fire-and-forget send — swallows context-invalidated errors. */
+function sendMsgSafe(msg) {
+  if (!chrome.runtime?.id) return;
+  try { chrome.runtime.sendMessage(msg).catch(() => {}); } catch (_) {}
 }
 
 function esc(str) {
