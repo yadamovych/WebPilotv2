@@ -47,14 +47,23 @@ app.add_middleware(
 
 
 class FillTemplateRequest(BaseModel):
-    userRequest: str = Field(..., description="Natural language task description from the user")
-    variables: list[str] = Field(..., description="List of TEMPLATE VARIABLES {{varName}} to generate (not extracted variables)")
+    userRequest: str = Field(
+        ..., description="Natural language task description from the user"
+    )
+    variables: list[str] = Field(
+        ...,
+        description="List of TEMPLATE VARIABLES {{varName}} to generate (not extracted variables)",
+    )
     templateName: str = Field(..., description="Name of the automation template")
-    templateDescription: Optional[str] = Field(default="", description="Optional template description")
+    templateDescription: Optional[str] = Field(
+        default="", description="Optional template description"
+    )
     backend: Optional[str] = Field(default=None, description="AI backend to use")
     # API key can be supplied by the extension for convenience; for production
     # deployments configure keys via server-side environment variables instead.
-    apiKey: Optional[str] = Field(default=None, description="API key (optional if set server-side)")
+    apiKey: Optional[str] = Field(
+        default=None, description="API key (optional if set server-side)"
+    )
     model: Optional[str] = Field(default=None, description="Model override (optional)")
 
 
