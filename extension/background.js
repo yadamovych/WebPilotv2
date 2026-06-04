@@ -516,74 +516,84 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
       step: currentStep,
     }).catch(() => {});
 
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY_MS = 1000;
-    let result;
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      if (attempt === 1) {
-        console.log(`[WebPilot] Executing step ${i + 1}/${steps.length}: ${currentStep.action}${currentStep.selector ? ` (${currentStep.selector})` : ''}${currentStep.variable ? ` -> [[extracted.${currentStep.variable}]]` : ''}`);
-      } else {
-        console.log(`[WebPilot] Retrying step ${i + 1} (attempt ${attempt}/${MAX_RETRIES})`);
-      }
-      
-      result = await chrome.tabs.sendMessage(tabId, {
-        type: 'EXECUTE_STEP',
-        step: currentStep,
-        index: i,
-        total: steps.length,
-        devMode,
-        afterNavigate: attempt > 1 || (i > 0 && steps[i - 1].action === 'navigate'),
-      });
-      if (!result?.error) break;
-      if (attempt < MAX_RETRIES) {
-        chrome.runtime.sendMessage({
-          type: 'PLAYBACK_PROGRESS',
-          currentIndex: i,
-          total: steps.length,
-          step: currentStep,
-          retryAttempt: attempt,
-          retryMax: MAX_RETRIES,
-        }).catch(() => {});
-        await delay(RETRY_DELAY_MS);
-      }
-    }
-
-    if (result?.error) {
-      throw new Error(`Step ${i + 1} failed after ${MAX_RETRIES} attempts: ${result.error}`);
-    }
-
-    // If the step extracted a variable, persist it in session storage from the
-    // background (trusted context) so later steps can resolve [[extracted.var]] reliably.
-    if (result?.extracted) {
-      const storageItems = {};
-      for (const [varName, val] of Object.entries(result.extracted)) {
-        // Only store non-empty extracted values to avoid overwriting good values with empty extractions
-        const valStr = String(val).trim();
-        if (valStr.length > 0) {
-          storageItems[`extracted_${varName}`] = val;
-          console.log(`[WebPilot] Storing extracted variable: ${varName} = ${valStr.substring(0, 50)}`);
-        } else {
-          console.warn(`[WebPilot] Skipping empty extracted value for: ${varName}`);
-        }
-      }
-      
-      if (Object.keys(storageItems).length > 0) {
-        try { 
-          await chrome.storage.session.set(storageItems);
-        } catch (err) {
-          console.error('[WebPilot] Failed to store extracted variables:', err);
-        }
-      }
-    }
-
-    // After a navigate step the page unloads — wait for it to fully reload
-    // then re-inject the content script before executing further steps.
+    // Handle navigate actions directly in background (don't send to content script)
+    // This avoids "Receiving end does not exist" error when the page unloads
     if (currentStep.action === 'navigate') {
+      console.log(`[WebPilot] Executing step ${i + 1}/${steps.length}: navigate to ${currentStep.value}`);
+      
+      // Update the tab URL directly
+      await chrome.tabs.update(tabId, { url: currentStep.value });
+      
+      // Wait for the new page to load completely
       await waitForTabLoad(tabId);
+      
+      // Inject content script on the new page
       await ensureContentScript(tabId);
+      
       // Small settling delay for SPAs that render after the load event
       await delay(300);
     } else {
+      // For non-navigate actions, send to content script with retries
+      const MAX_RETRIES = 3;
+      const RETRY_DELAY_MS = 1000;
+      let result;
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        if (attempt === 1) {
+          console.log(`[WebPilot] Executing step ${i + 1}/${steps.length}: ${currentStep.action}${currentStep.selector ? ` (${currentStep.selector})` : ''}${currentStep.variable ? ` -> [[extracted.${currentStep.variable}]]` : ''}`);
+        } else {
+          console.log(`[WebPilot] Retrying step ${i + 1} (attempt ${attempt}/${MAX_RETRIES})`);
+        }
+        
+        result = await chrome.tabs.sendMessage(tabId, {
+          type: 'EXECUTE_STEP',
+          step: currentStep,
+          index: i,
+          total: steps.length,
+          devMode,
+          afterNavigate: attempt > 1 || (i > 0 && steps[i - 1].action === 'navigate'),
+        }).catch(err => ({ error: err.message }));
+        if (!result?.error) break;
+        if (attempt < MAX_RETRIES) {
+          chrome.runtime.sendMessage({
+            type: 'PLAYBACK_PROGRESS',
+            currentIndex: i,
+            total: steps.length,
+            step: currentStep,
+            retryAttempt: attempt,
+            retryMax: MAX_RETRIES,
+          }).catch(() => {});
+          await delay(RETRY_DELAY_MS);
+        }
+      }
+
+      if (result?.error) {
+        throw new Error(`Step ${i + 1} failed after ${MAX_RETRIES} attempts: ${result.error}`);
+      }
+
+      // If the step extracted a variable, persist it in session storage from the
+      // background (trusted context) so later steps can resolve [[extracted.var]] reliably.
+      if (result?.extracted) {
+        const storageItems = {};
+        for (const [varName, val] of Object.entries(result.extracted)) {
+          // Only store non-empty extracted values to avoid overwriting good values with empty extractions
+          const valStr = String(val).trim();
+          if (valStr.length > 0) {
+            storageItems[`extracted_${varName}`] = val;
+            console.log(`[WebPilot] Storing extracted variable: ${varName} = ${valStr.substring(0, 50)}`);
+          } else {
+            console.warn(`[WebPilot] Skipping empty extracted value for: ${varName}`);
+          }
+        }
+        
+        if (Object.keys(storageItems).length > 0) {
+          try { 
+            await chrome.storage.session.set(storageItems);
+          } catch (err) {
+            console.error('[WebPilot] Failed to store extracted variables:', err);
+          }
+        }
+      }
+
       // Per-step delay (default 600 ms if not set)
       await delay(currentStep.delayMs ?? 600);
     }

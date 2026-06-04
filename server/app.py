@@ -202,6 +202,8 @@ async def fill_template(request: FillTemplateRequest) -> FillTemplateResponse:
         # Ensure all requested variables have a string value
         for var in request.variables:
             variables.setdefault(var, "")
+        # Convert all values to strings (AI may return numbers, booleans, etc.)
+        variables = {k: str(v) for k, v in variables.items()}
         return FillTemplateResponse(variables=variables, usage=_build_usage(result))
     except Exception as exc:
         logger.exception("fill-template error")
@@ -281,6 +283,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 def _extract_json(text: str) -> dict:
     """Robustly extract a JSON object from an AI response string."""
     text = text.strip()
+
+    # 0. Strip reasoning/thinking tags that some models include (e.g., <think>...</think>, <analysis>...</analysis>)
+    text = re.sub(r"<(think|analysis|reasoning|reflection)>.*?</\1>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
 
     # 1. Direct parse
     try:
