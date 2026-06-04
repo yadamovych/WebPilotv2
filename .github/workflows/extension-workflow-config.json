@@ -1,0 +1,197 @@
+{
+  "name": "WebPilot Extension Error Handling System",
+  "version": "1.0.0",
+  "description": "Comprehensive error handling, tracking, and automated GitHub issue creation for WebPilot extension",
+  "components": {
+    "error-handler.js": {
+      "purpose": "Centralized error tracking and logging for the extension",
+      "exports": {
+        "errorTracker": {
+          "type": "ErrorTracker class",
+          "methods": {
+            "track(error, context)": "Log an error with context information",
+            "getErrors()": "Retrieve all tracked errors",
+            "clearErrors()": "Clear error logs",
+            "exportErrors()": "Export errors with metadata for reporting"
+          },
+          "features": [
+            "Automatic error persistence to chrome.storage",
+            "Memory-bounded error queue (max 50 in-memory, 100 in storage)",
+            "URL and timestamp tracking for debugging",
+            "Context metadata for categorization"
+          ]
+        },
+        "safeChrome(operation, fallback)": {
+          "type": "Function",
+          "purpose": "Safe wrapper for chrome API calls",
+          "handles": ["Extension context invalidation", "Missing permissions"]
+        },
+        "sendMessageSafe(message, options)": {
+          "type": "Function",
+          "purpose": "Safe messaging with automatic timeout and error handling",
+          "options": {
+            "timeout": "Message timeout in ms (default 5000)",
+            "fallback": "Value to return on failure"
+          }
+        },
+        "safeStor": {
+          "type": "Object",
+          "purpose": "Safe chrome.storage operations",
+          "methods": ["get(keys)", "set(items)", "remove(keys)"]
+        },
+        "reportErrorsToBackend(backendUrl)": {
+          "type": "Function",
+          "purpose": "Send collected errors to backend for analysis",
+          "returns": "Promise<{success: boolean, error?: string}>"
+        }
+      }
+    },
+    "ci.yml": {
+      "purpose": "Main CI/CD pipeline with enhanced extension checking",
+      "extension-checks": {
+        "eslint": {
+          "config": ".eslintrc.json",
+          "generates": "lint-report.json",
+          "outputs": "LINT_REPORT_GENERATED, ERROR_COUNT, WARN_COUNT"
+        },
+        "security": {
+          "checks": [
+            "eval() usage detection",
+            "localStorage vs chrome.storage usage",
+            "Hardcoded credentials detection"
+          ],
+          "outputs": "Security warnings in job summary"
+        },
+        "artifact-upload": {
+          "name": "extension-lint-report",
+          "includes": "lint-report.json",
+          "retention": "30 days"
+        }
+      }
+    },
+    "extension-error-checker.yml": {
+      "purpose": "Scheduled and on-demand error checking with automatic GitHub issue creation",
+      "triggers": {
+        "schedule": "Every 6 hours (0 */6 * * *)",
+        "manual": "workflow_dispatch with severity filter"
+      },
+      "jobs": {
+        "check-extension-errors": {
+          "steps": [
+            "ESLint analysis (if configured)",
+            "JavaScript error pattern detection",
+            "Promise rejection detection",
+            "Missing error handler detection",
+            "Debug statement detection",
+            "Artifact upload for 30 days",
+            "Automatic GitHub issue creation or update"
+          ]
+        }
+      },
+      "issue-creation": {
+        "labels": ["extension-errors", "bug", "automated"],
+        "behavior": "Creates new issue or updates existing open issue with same title",
+        "includes": [
+          "Error count",
+          "File-by-file breakdown",
+          "Line numbers and error types",
+          "Rule IDs for ESLint violations"
+        ]
+      }
+    },
+    ".eslintrc.json": {
+      "purpose": "ESLint configuration for extension code quality",
+      "extends": ["eslint:recommended"],
+      "environments": ["browser", "es2021", "webextensions"],
+      "key-rules": {
+        "no-unused-vars": "warn (ignore _-prefixed)",
+        "no-console": "warn (allow console.warn/error)",
+        "eqeqeq": "error (always use ===)",
+        "curly": "error (always use braces)",
+        "semi": "error (always required)",
+        "no-var": "warn (prefer const/let)",
+        "prefer-const": "warn"
+      }
+    },
+    "package.json": {
+      "purpose": "Node.js configuration for extension dev tools",
+      "scripts": {
+        "lint": "eslint . --ext .js",
+        "lint:fix": "eslint . --ext .js --fix"
+      }
+    }
+  },
+  "workflow": {
+    "pull-request": {
+      "trigger": "On PR to main/develop",
+      "steps": [
+        "1. Install Node.js and dependencies",
+        "2. Run ESLint with JSON output",
+        "3. Run security checks",
+        "4. Upload lint report as artifact",
+        "5. Fail job if errors found (exit code 1)"
+      ],
+      "outcome": "PR can only merge if all checks pass"
+    },
+    "scheduled-check": {
+      "trigger": "Every 6 hours",
+      "steps": [
+        "1. Run full ESLint analysis",
+        "2. Perform code pattern analysis",
+        "3. Check for common issues",
+        "4. Create detailed report",
+        "5. Check for existing open issue",
+        "6. Create new issue or update existing",
+        "7. Label issue for tracking"
+      ],
+      "outcome": "Automatic GitHub issue created/updated"
+    },
+    "error-tracking": {
+      "extension-runtime": [
+        "1. error-handler.js loaded in all extension scripts",
+        "2. Errors caught by errorTracker.track()",
+        "3. Errors persisted to chrome.storage.local",
+        "4. Users can export errors from extension options",
+        "5. Backend can receive errors via reportErrorsToBackend()"
+      ]
+    }
+  },
+  "integration-guide": {
+    "step-1-load-error-handler": {
+      "description": "Include error-handler.js in your extension scripts",
+      "manifest-update": "Already configured in web_accessible_resources",
+      "script-update": "Add <script src=\"error-handler.js\"></script> to HTML files or import in JS files"
+    },
+    "step-2-wrap-chrome-calls": {
+      "description": "Replace direct chrome.* calls with safe wrappers",
+      "before": "chrome.storage.session.set({key: value});",
+      "after": "safeStor.set({key: value});"
+    },
+    "step-3-handle-messaging": {
+      "description": "Use sendMessageSafe for background/content communication",
+      "before": "chrome.runtime.sendMessage({type: 'MSG'}, callback);",
+      "after": "sendMessageSafe({type: 'MSG'}, {timeout: 5000}).then(response => { ... });"
+    },
+    "step-4-configure-backend": {
+      "description": "Optional: Set up backend error reporting",
+      "setup": "Configure backend URL and call reportErrorsToBackend(backendUrl) periodically"
+    }
+  },
+  "github-issue-example": {
+    "title": "🐛 Extension errors detected (42 issues)",
+    "labels": ["extension-errors", "bug", "automated"],
+    "body": "## Automated Extension Error Report\n\n**Timestamp:** 2025-06-04T12:00:00Z\n**Branch:** main\n\n## Lint Errors\n\n### background.js\n- Line 45: 'STATE' is assigned a value but never used (no-unused-vars)\n- Line 112: Missing semicolon (semi)\n\n### content.js\n- Line 23: Expected '===' but got '==' (eqeqeq)\n\n---\nThis issue was automatically created by the Extension Error Checker workflow."
+  },
+  "usage-examples": {
+    "track-custom-error": "errorTracker.track(new Error('Custom error'), {context: 'user-action', severity: 'high'});",
+    "safe-storage": "const data = await safeStor.get(['templates']); await safeStor.set({lastUsed: Date.now()});",
+    "safe-messaging": "const response = await sendMessageSafe({type: 'GET_STATE'}, {timeout: 3000, fallback: {}});",
+    "report-errors": "const result = await reportErrorsToBackend('https://api.webpilot.local'); console.log(result);"
+  },
+  "monitoring": {
+    "artifacts": "Extension lint reports stored in GitHub Actions artifacts (30-day retention)",
+    "issues": "Automatic GitHub issues for tracking errors across versions",
+    "storage": "chrome.storage.local keeps error history (up to 100 errors)",
+    "dashboard": "View error trends in GitHub Issues with 'extension-errors' label"
+  }
+}

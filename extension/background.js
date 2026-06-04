@@ -30,7 +30,9 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Forward context-menu clicks to the content script of the active tab.
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (!tab?.id) return;
+  if (!tab?.id) {
+    return;
+  }
   const mode = info.menuItemId === 'webpilot-extract' ? 'extract' : 'fill';
   chrome.tabs.sendMessage(tab.id, {
     type: 'SHOW_EXTRACT_MODAL',
@@ -96,59 +98,59 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const tabId = sender.tab?.id ?? null;
 
   switch (message.type) {
-    case 'START_RECORDING':
-      handleStartRecording(message.tabId, { noAutoNavigate: message.noAutoNavigate ?? false })
-        .then(sendResponse).catch(err => sendResponse({ error: err.message }));
-      break;
-    case 'STOP_RECORDING':
-      handleStopRecording().then(sendResponse).catch(err => sendResponse({ error: err.message }));
-      break;
-    case 'CLEAR_STEPS':
-      STATE.steps = [];
-      persistState();
-      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: [] }).catch(() => {});
-      sendResponse({ success: true });
-      break;
-    case 'UPDATE_STEPS':
-      STATE.steps = message.steps ?? STATE.steps;
-      persistState();
-      sendResponse({ success: true });
-      break;
-    case 'RECORD_ACTION':
-      handleRecordAction(message.action, tabId, sendResponse);
-      break;
-    case 'GET_STATE':
-      sendResponse({ state: STATE });
-      break;
-    case 'SAVE_TEMPLATE':
-      handleSaveTemplate(message.template).then(sendResponse).catch(err => sendResponse({ error: err.message }));
-      break;
-    case 'GET_TEMPLATES':
-      handleGetTemplates().then(sendResponse).catch(err => sendResponse({ error: err.message }));
-      break;
-    case 'DELETE_TEMPLATE':
-      handleDeleteTemplate(message.id).then(sendResponse).catch(err => sendResponse({ error: err.message }));
-      break;
-    case 'PLAY_TEMPLATE':
-      handlePlayTemplate(message.templateId, message.userRequest, message.tabId)
-        .then(sendResponse).catch(err => sendResponse({ error: err.message }));
-      break;
-    case 'STOP_PLAYBACK':
-      STATE.playback.active = false;
-      sendResponse({ success: true });
-      break;
-    case 'GET_SERVER_CONFIG':
-      chrome.storage.local.get('serverConfig')
-        .then(({ serverConfig = {} }) => sendResponse({ success: true, config: serverConfig }))
-        .catch(err => sendResponse({ error: err.message }));
-      break;
-    case 'SET_SERVER_CONFIG':
-      chrome.storage.local.set({ serverConfig: message.config })
-        .then(() => sendResponse({ success: true }))
-        .catch(err => sendResponse({ error: err.message }));
-      break;
-    default:
-      sendResponse({ error: `Unknown message type: ${message.type}` });
+  case 'START_RECORDING':
+    handleStartRecording(message.tabId, { noAutoNavigate: message.noAutoNavigate ?? false })
+      .then(sendResponse).catch(err => sendResponse({ error: err.message }));
+    break;
+  case 'STOP_RECORDING':
+    handleStopRecording().then(sendResponse).catch(err => sendResponse({ error: err.message }));
+    break;
+  case 'CLEAR_STEPS':
+    STATE.steps = [];
+    persistState();
+    chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: [] }).catch(() => {});
+    sendResponse({ success: true });
+    break;
+  case 'UPDATE_STEPS':
+    STATE.steps = message.steps ?? STATE.steps;
+    persistState();
+    sendResponse({ success: true });
+    break;
+  case 'RECORD_ACTION':
+    handleRecordAction(message.action, tabId, sendResponse);
+    break;
+  case 'GET_STATE':
+    sendResponse({ state: STATE });
+    break;
+  case 'SAVE_TEMPLATE':
+    handleSaveTemplate(message.template).then(sendResponse).catch(err => sendResponse({ error: err.message }));
+    break;
+  case 'GET_TEMPLATES':
+    handleGetTemplates().then(sendResponse).catch(err => sendResponse({ error: err.message }));
+    break;
+  case 'DELETE_TEMPLATE':
+    handleDeleteTemplate(message.id).then(sendResponse).catch(err => sendResponse({ error: err.message }));
+    break;
+  case 'PLAY_TEMPLATE':
+    handlePlayTemplate(message.templateId, message.userRequest, message.tabId)
+      .then(sendResponse).catch(err => sendResponse({ error: err.message }));
+    break;
+  case 'STOP_PLAYBACK':
+    STATE.playback.active = false;
+    sendResponse({ success: true });
+    break;
+  case 'GET_SERVER_CONFIG':
+    chrome.storage.local.get('serverConfig')
+      .then(({ serverConfig = {} }) => sendResponse({ success: true, config: serverConfig }))
+      .catch(err => sendResponse({ error: err.message }));
+    break;
+  case 'SET_SERVER_CONFIG':
+    chrome.storage.local.set({ serverConfig: message.config })
+      .then(() => sendResponse({ success: true }))
+      .catch(err => sendResponse({ error: err.message }));
+    break;
+  default:
+    sendResponse({ error: `Unknown message type: ${message.type}` });
   }
 
   return true; // keep message channel open for async sendResponse
@@ -159,8 +161,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // ---------------------------------------------------------------------------
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   // Only care about the recording tab reaching a fully loaded state
-  if (!STATE.recording || tabId !== STATE.recordingTabId) return;
-  if (changeInfo.status !== 'complete') return;
+  if (!STATE.recording || tabId !== STATE.recordingTabId) {
+    return;
+  }
+  if (changeInfo.status !== 'complete') {
+    return;
+  }
 
   // Re-inject and resume recording on the freshly-loaded page
   ensureContentScript(tabId)
@@ -174,23 +180,25 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 // Auto-record navigate steps when switching tabs during recording
 // ---------------------------------------------------------------------------
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
-  if (!STATE.recording) return;
-  
+  if (!STATE.recording) {
+    return;
+  }
+
   // If switching to a different tab while recording, add navigate step
   if (tabId !== STATE.recordingTabId) {
     try {
       const tab = await chrome.tabs.get(tabId);
       const url = tab?.url;
-      
+
       // Skip restricted URLs (chrome://, about:, extension pages, etc.)
-      if (!url || 
-          url.startsWith('chrome') || 
-          url.startsWith('about:') || 
+      if (!url ||
+          url.startsWith('chrome') ||
+          url.startsWith('about:') ||
           url.startsWith('edge:') ||
           url.startsWith('data:')) {
         return;
       }
-      
+
       // Add navigate step to record the tab switch
       const label = `Navigate to ${url}`;
       STATE.steps.push({
@@ -202,16 +210,16 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
         timestamp: Date.now(),
         auto: true, // Mark as auto-generated
       });
-      
+
       console.log(`[WebPilot] Auto-recorded navigate step to: ${url}`);
-      
+
       // Notify popup that steps have changed
       chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
-      
+
       // Update recording tab to the new tab
       STATE.recordingTabId = tabId;
       persistState();
-      
+
       // Ensure content script is present and start recording on the new tab
       await ensureContentScript(tabId);
       await broadcastToFrames(tabId, { type: 'START_RECORDING' });
@@ -284,7 +292,7 @@ async function handleStopRecording() {
     // visibilitychange GET_STATE check and now show the recording overlay.
     const tabs = await chrome.tabs.query({}).catch(() => []);
     const stopPromises = (tabs || []).map((t) =>
-      broadcastToFrames(t.id, { type: 'STOP_RECORDING' }).catch(() => {})
+      broadcastToFrames(t.id, { type: 'STOP_RECORDING' }).catch(() => {}),
     );
     await Promise.allSettled(stopPromises);
   } finally {
@@ -393,7 +401,9 @@ async function handlePlayTemplate(templateId, userRequest, tabId) {
   try {
     const { templates = {} } = await chrome.storage.local.get('templates');
     const template = templates[templateId];
-    if (!template) throw new Error('Template not found');
+    if (!template) {
+      throw new Error('Template not found');
+    }
 
     if (!tabId) {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -402,7 +412,7 @@ async function handlePlayTemplate(templateId, userRequest, tabId) {
 
     // Ask the AI server to fill TEMPLATE VARIABLES (before navigation so we don't lose context)
     const variables = await fillTemplateVariables(template, userRequest);
-    
+
     // Collect EXTRACTED VARIABLES from session storage
     const extractedVariables = {};
     try {
@@ -414,7 +424,7 @@ async function handlePlayTemplate(templateId, userRequest, tabId) {
         }
       }
     } catch (_) {}
-    
+
     // Substitute both TEMPLATE and EXTRACTED variables
     const resolvedSteps = substituteVariables(template.steps, variables, extractedVariables);
 
@@ -438,7 +448,7 @@ async function handlePlayTemplate(templateId, userRequest, tabId) {
       if (firstNav === -1) {
         throw new Error(
           `WebPilot cannot run on this page (${currentUrl.split('://')[0]}:// pages are restricted). ` +
-          `Open a webpage first, then run the workflow.`
+          'Open a webpage first, then run the workflow.',
         );
       }
       // Navigate the current tab to the target URL directly
@@ -467,7 +477,9 @@ async function handlePlayTemplate(templateId, userRequest, tabId) {
 
 async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
   for (let i = startIndex; i < steps.length; i++) {
-    if (!STATE.playback.active) break;
+    if (!STATE.playback.active) {
+      break;
+    }
 
     STATE.playback.currentIndex = i;
 
@@ -480,7 +492,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
         const sessionItems = await chrome.storage.session.get(null);
         let resolved = currentStep.value;
         let resolved_count = 0;
-        
+
         // Resolve [[extracted.varName]] from session storage (values stored by previous extract steps)
         if (/\[\[extracted\.\w+\]\]/.test(resolved)) {
           for (const [key, val] of Object.entries(sessionItems || {})) {
@@ -498,7 +510,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
             }
           }
         }
-        
+
         if (resolved !== currentStep.value) {
           currentStep = { ...currentStep, value: resolved };
           console.log(`[WebPilot] Step ${i}: resolved ${resolved_count} extracted variables`);
@@ -520,16 +532,16 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
     // This avoids "Receiving end does not exist" error when the page unloads
     if (currentStep.action === 'navigate') {
       console.log(`[WebPilot] Executing step ${i + 1}/${steps.length}: navigate to ${currentStep.value}`);
-      
+
       // Update the tab URL directly
       await chrome.tabs.update(tabId, { url: currentStep.value });
-      
+
       // Wait for the new page to load completely
       await waitForTabLoad(tabId);
-      
+
       // Inject content script on the new page
       await ensureContentScript(tabId);
-      
+
       // Small settling delay for SPAs that render after the load event
       await delay(300);
     } else {
@@ -543,7 +555,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
         } else {
           console.log(`[WebPilot] Retrying step ${i + 1} (attempt ${attempt}/${MAX_RETRIES})`);
         }
-        
+
         result = await chrome.tabs.sendMessage(tabId, {
           type: 'EXECUTE_STEP',
           step: currentStep,
@@ -552,7 +564,9 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
           devMode,
           afterNavigate: attempt > 1 || (i > 0 && steps[i - 1].action === 'navigate'),
         }).catch(err => ({ error: err.message }));
-        if (!result?.error) break;
+        if (!result?.error) {
+          break;
+        }
         if (attempt < MAX_RETRIES) {
           chrome.runtime.sendMessage({
             type: 'PLAYBACK_PROGRESS',
@@ -584,9 +598,9 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
             console.warn(`[WebPilot] Skipping empty extracted value for: ${varName}`);
           }
         }
-        
+
         if (Object.keys(storageItems).length > 0) {
-          try { 
+          try {
             await chrome.storage.session.set(storageItems);
           } catch (err) {
             console.error('[WebPilot] Failed to store extracted variables:', err);
@@ -616,7 +630,9 @@ async function fillTemplateVariables(template, userRequest) {
     }
   }
 
-  if (templateVariableNames.size === 0) return {};
+  if (templateVariableNames.size === 0) {
+    return {};
+  }
 
   // ---------------------------------------------------------------------------
   // Check for variables already extracted during a previous recording/playback
@@ -648,7 +664,7 @@ async function fillTemplateVariables(template, userRequest) {
 
   // Determine which TEMPLATE VARIABLES still need AI resolution
   const needsAI = Array.from(templateVariableNames).filter(
-    (v) => !(v in extractedFromStorage) && !extractStepVars.has(v)
+    (v) => !(v in extractedFromStorage) && !extractStepVars.has(v),
   );
 
   let aiVariables = {};
@@ -687,29 +703,31 @@ async function fillTemplateVariables(template, userRequest) {
 /**
  * Substitute both {{variable}} (template/AI) and [[extracted.variable]] (DOM/page extraction)
  * placeholders with their resolved values.
- * 
+ *
  * TEMPLATE VARIABLES {{varName}}: AI-generated values
  * EXTRACTED VARIABLES [[extracted.varName]]: Values from page/DOM extraction
  */
 function substituteVariables(steps, variables, extractedVariables = {}) {
   return steps.map((step) => {
-    if (!step.value) return step;
+    if (!step.value) {
+      return step;
+    }
     let value = step.value;
-    
+
     // Replace TEMPLATE VARIABLES {{varName}} with AI-generated values
     for (const [key, val] of Object.entries(variables)) {
       if (val !== null && val !== undefined) {
         value = value.replaceAll(`{{${key}}}`, String(val));
       }
     }
-    
+
     // Replace EXTRACTED VARIABLES [[extracted.varName]] with page/DOM values
     for (const [key, val] of Object.entries(extractedVariables)) {
       if (val !== null && val !== undefined) {
         value = value.replaceAll(`[[extracted.${key}]]`, String(val));
       }
     }
-    
+
     return { ...step, value };
   });
 }
@@ -729,8 +747,8 @@ async function broadcastToFrames(tabId, message) {
   const frames = await chrome.webNavigation.getAllFrames({ tabId }).catch(() => []);
   await Promise.allSettled(
     (frames ?? []).map(({ frameId }) =>
-      chrome.tabs.sendMessage(tabId, message, { frameId }).catch(() => {})
-    )
+      chrome.tabs.sendMessage(tabId, message, { frameId }).catch(() => {}),
+    ),
   );
 }
 
@@ -742,8 +760,12 @@ function waitForTabLoad(tabId, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     // Check immediately in case the tab already finished loading
     chrome.tabs.get(tabId, (tab) => {
-      if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
-      if (tab.status === 'complete') { resolve(); return; }
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message)); return;
+      }
+      if (tab.status === 'complete') {
+        resolve(); return;
+      }
 
       const timer = setTimeout(() => {
         chrome.tabs.onUpdated.removeListener(listener);
@@ -751,7 +773,9 @@ function waitForTabLoad(tabId, timeoutMs = 15000) {
       }, timeoutMs);
 
       function listener(updatedTabId, changeInfo) {
-        if (updatedTabId !== tabId) return;
+        if (updatedTabId !== tabId) {
+          return;
+        }
         if (changeInfo.status === 'complete') {
           clearTimeout(timer);
           chrome.tabs.onUpdated.removeListener(listener);
@@ -777,7 +801,9 @@ function waitForTabLoad(tabId, timeoutMs = 15000) {
 async function ensureContentScript(tabId) {
   // First check the tab URL — scripting is blocked on chrome:// and edge:// pages
   const tab = await chrome.tabs.get(tabId).catch(() => null);
-  if (!tab) throw new Error('Tab not found');
+  if (!tab) {
+    throw new Error('Tab not found');
+  }
 
   const url = tab.url ?? '';
   if (
@@ -798,7 +824,9 @@ async function ensureContentScript(tabId) {
     new Promise((resolve) => setTimeout(() => resolve(false), 600)),
   ]);
 
-  if (alive) return; // content script already running
+  if (alive) {
+    return;
+  } // content script already running
 
   // Inject the content script programmatically
   await chrome.scripting.executeScript({

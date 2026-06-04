@@ -9,12 +9,16 @@
   'use strict';
 
   // Guard against double-injection (manifest + programmatic ensureContentScript both active).
-  if (window.__webpilotContentLoaded) return;
+  if (window.__webpilotContentLoaded) {
+    return;
+  }
   window.__webpilotContentLoaded = true;
 
 
   // Guard against double-injection on dynamic page navigations
-  if (window.__webpilotLoaded) return;
+  if (window.__webpilotLoaded) {
+    return;
+  }
   window.__webpilotLoaded = true;
 
   // ---------------------------------------------------------------------------
@@ -25,41 +29,61 @@
   // safeSend() absorbs those errors and cleanly tears down recording state.
 
   function handleContextInvalidated() {
-    try { stopRecording(); } catch (_) {}
+    try {
+      stopRecording();
+    } catch (_) {}
   }
 
   function safeSend(msg, cb) {
     if (!chrome.runtime?.id) {
       handleContextInvalidated();
-      if (cb) cb(undefined);
+      if (cb) {
+        cb(undefined);
+      }
       return;
     }
     try {
       chrome.runtime.sendMessage(msg, (res) => {
         if (chrome.runtime.lastError) { /* SW waking up or gone — ignore */ }
-        if (cb) cb(res);
+        if (cb) {
+          cb(res);
+        }
       });
     } catch (e) {
       handleContextInvalidated();
-      if (cb) cb(undefined);
+      if (cb) {
+        cb(undefined);
+      }
     }
   }
 
   function safeStorageSet(items) {
-    if (!chrome.runtime?.id) return;
-    try { chrome.storage.session.set(items).catch(() => {}); } catch (_) {}
+    if (!chrome.runtime?.id) {
+      return;
+    }
+    try {
+      chrome.storage.session.set(items).catch(() => {});
+    } catch (_) {}
   }
 
   function safeStorageGet(keys, cb) {
-    if (!chrome.runtime?.id) { cb({}); return; }
-    try { chrome.storage.session.get(keys, cb); } catch (_) { cb({}); }
+    if (!chrome.runtime?.id) {
+      cb({}); return;
+    }
+    try {
+      chrome.storage.session.get(keys, cb);
+    } catch (_) {
+      cb({});
+    }
   }
 
   // If recording was already active when this frame loaded (e.g. a TinyMCE
   // iframe that opened after broadcastToFrames was already called), join the
   // session immediately so input events are captured.
   safeSend({ type: 'GET_STATE' }, (res) => {
-    if (res?.state?.recording) startRecording();
+    if (res?.state?.recording) {
+      startRecording();
+    }
   });
 
   // Resume recording when tab becomes visible again (user switches back to this tab)
@@ -69,7 +93,9 @@
     } else {
       // Check recording state when tab becomes visible again
       safeSend({ type: 'GET_STATE' }, (res) => {
-        if (res?.state?.recording && !isRecording) startRecording();
+        if (res?.state?.recording && !isRecording) {
+          startRecording();
+        }
       });
     }
   });
@@ -91,7 +117,9 @@
   // native context-menu → SHOW_EXTRACT_MODAL path can find it).
   let lastRightClickedEl = null;
   document.addEventListener('contextmenu', (e) => {
-    if (isWebPilotEl(e.target)) return;
+    if (isWebPilotEl(e.target)) {
+      return;
+    }
     lastRightClickedEl = e.target;
   }, true); // capture phase so it runs even when recording handler calls preventDefault
 
@@ -112,7 +140,7 @@
   function getAvailableVariablesForFilling(callback) {
     // Get extracted values first
     const extracted = Array.from(extractedValues.entries());
-    
+
     // Also get recorded extract steps from background (for recording phase variables)
     safeSend({ type: 'GET_STATE' }, (res) => {
       const steps = res?.state?.steps || [];
@@ -123,7 +151,7 @@
         ...extracted,
         ...extractSteps
           .filter(step => !extractedValues.has(step.variable))
-          .map(step => [step.variable, null]) // null value = not yet extracted
+          .map(step => [step.variable, null]), // null value = not yet extracted
       ];
 
       callback(combined);
@@ -142,7 +170,9 @@
 
   // Extract text/value from element by selector
   function extractFromElement(selector, extractType = 'text') {
-    if (!selector) return '';
+    if (!selector) {
+      return '';
+    }
     const el = document.querySelector(selector);
     const matchCount = document.querySelectorAll(selector).length;
     if (!el) {
@@ -214,7 +244,7 @@
   // surface as an uncaught error to the page.
   try {
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    switch (message.type) {
+      switch (message.type) {
       case 'START_RECORDING':
         startRecording();
         sendResponse({ success: true });
@@ -238,7 +268,9 @@
       case 'HIGHLIGHT_STEP_ELEMENT': {
         document.getElementById('webpilot-step-hl')?.remove();
         const sel = message.selector;
-        if (!sel) { sendResponse({ success: true }); break; }
+        if (!sel) {
+          sendResponse({ success: true }); break;
+        }
         let found = false;
         try {
           const el = document.querySelector(sel);
@@ -269,28 +301,34 @@
 
       default:
         sendResponse({ error: `Unknown type: ${message.type}` });
-    }
-  });
+      }
+    });
   } catch (_) { /* extension context was invalidated before listener could be added */ }
 
   // ---------------------------------------------------------------------------
   // Recording — start / stop (continuous mode)
   // ---------------------------------------------------------------------------
   function startRecording() {
-    if (isRecording) return;
+    if (isRecording) {
+      return;
+    }
     isRecording = true;
     mountOverlay('WebPilot · Recording — interact with the page');
     attachListeners();
   }
 
   function stopRecording() {
-    if (!isRecording) return;
+    if (!isRecording) {
+      return;
+    }
     isRecording = false;
     detachListeners();
     // Flush any pending input timers so the last typed value is captured
     for (const [, { tid, el, selector }] of inputTimers) {
       clearTimeout(tid);
-      if (el) sendInputAction(el, selector);
+      if (el) {
+        sendInputAction(el, selector);
+      }
     }
     inputTimers.clear();
     unmountOverlay();
@@ -303,7 +341,9 @@
     if (overlayRoot) {
       // Update label if already mounted
       const badge = document.getElementById('webpilot-badge');
-      if (badge) badge.querySelector('span:last-child').textContent = label;
+      if (badge) {
+        badge.querySelector('span:last-child').textContent = label;
+      }
       return;
     }
 
@@ -328,7 +368,9 @@
   }
 
   function injectStyles() {
-    if (document.getElementById('webpilot-styles')) return;
+    if (document.getElementById('webpilot-styles')) {
+      return;
+    }
     const style = document.createElement('style');
     style.id = 'webpilot-styles';
     style.textContent = `
@@ -585,12 +627,18 @@
   }
 
   function isWebPilotEl(el) {
-    if (!el) return false;
+    if (!el) {
+      return false;
+    }
     // Check overlay
-    if (el === overlayRoot || overlayRoot?.contains(el)) return true;
+    if (el === overlayRoot || overlayRoot?.contains(el)) {
+      return true;
+    }
     // Check extract modal
     const modal = document.getElementById('webpilot-extract-modal');
-    if (el === modal || modal?.contains(el)) return true;
+    if (el === modal || modal?.contains(el)) {
+      return true;
+    }
     return false;
   }
 
@@ -599,39 +647,59 @@
    * so a click on them should not immediately finish single-step capture.
    */
   function isTypeable(el) {
-    if (!el) return false;
-    if (el.isContentEditable) return true;
+    if (!el) {
+      return false;
+    }
+    if (el.isContentEditable) {
+      return true;
+    }
     // Also catch clicks on children inside a contenteditable (e.g. <p> inside Jira editor)
-    if (el.closest?.('[contenteditable="true"]')) return true;
+    if (el.closest?.('[contenteditable="true"]')) {
+      return true;
+    }
     const tag = el.tagName;
-    if (tag === 'TEXTAREA') return true;
+    if (tag === 'TEXTAREA') {
+      return true;
+    }
     if (tag === 'INPUT') {
       const t = (el.type || 'text').toLowerCase();
       return ['text', 'email', 'password', 'search', 'tel', 'url',
-              'number', 'date', 'datetime-local', 'time', 'month', 'week'].includes(t);
+        'number', 'date', 'datetime-local', 'time', 'month', 'week'].includes(t);
     }
     // Container divs that wrap a rich-text editor (e.g. Jira's div.jira-wikifield):
     // clicking them should not produce a 'click' step — the inner editor will capture typing.
     if (tag === 'DIV' || tag === 'SPAN' || tag === 'SECTION' || tag === 'ARTICLE') {
-      if (el.querySelector?.('[contenteditable="true"]')) return true;
-      if (el.querySelector?.('textarea')) return true;
+      if (el.querySelector?.('[contenteditable="true"]')) {
+        return true;
+      }
+      if (el.querySelector?.('textarea')) {
+        return true;
+      }
     }
     return false;
   }
 
   function onMouseOver(e) {
-    if (!isRecording || isWebPilotEl(e.target)) return;
+    if (!isRecording || isWebPilotEl(e.target)) {
+      return;
+    }
     setHoverHighlight(e.target);
   }
 
   function onMouseOut(e) {
-    if (!isRecording) return;
+    if (!isRecording) {
+      return;
+    }
     e.target.classList.remove('wp-hover');
-    if (hoveredEl === e.target) hoveredEl = null;
+    if (hoveredEl === e.target) {
+      hoveredEl = null;
+    }
   }
 
   function onCapturingClick(e) {
-    if (!isRecording || isWebPilotEl(e.target)) return;
+    if (!isRecording || isWebPilotEl(e.target)) {
+      return;
+    }
     // Never block — let the click reach the page normally
 
     const el = e.target;
@@ -777,15 +845,27 @@
    * Examples:  BUTTON  |  INPUT[type=text][name=summary]  |  A[href=/issues]  |  DIV[role=button]
    */
   function elementHint(el) {
-    if (!el) return '';
+    if (!el) {
+      return '';
+    }
     const tag = el.tagName.toUpperCase();
     const attrs = [];
-    if (el.type && el.tagName === 'INPUT') attrs.push(`type=${el.type}`);
-    if (el.name)  attrs.push(`name=${el.name}`);
-    if (el.id)    attrs.push(`#${el.id}`);
+    if (el.type && el.tagName === 'INPUT') {
+      attrs.push(`type=${el.type}`);
+    }
+    if (el.name)  {
+      attrs.push(`name=${el.name}`);
+    }
+    if (el.id)    {
+      attrs.push(`#${el.id}`);
+    }
     const role = el.getAttribute('role');
-    if (role)     attrs.push(`role=${role}`);
-    if (el.isContentEditable) attrs.push('contenteditable');
+    if (role)     {
+      attrs.push(`role=${role}`);
+    }
+    if (el.isContentEditable) {
+      attrs.push('contenteditable');
+    }
     return attrs.length ? `${tag}[${attrs.join('][')}]` : tag;
   }
 
@@ -804,9 +884,13 @@
   }
 
   function onInput(e) {
-    if (!isRecording || isWebPilotEl(e.target)) return;
+    if (!isRecording || isWebPilotEl(e.target)) {
+      return;
+    }
     // Native date fields emit 'change' (not 'input') when picked — skip here to avoid duplicates
-    if (isDateField(e.target)) return;
+    if (isDateField(e.target)) {
+      return;
+    }
     // For contenteditable children, target the root editable element
     const el = e.target.isContentEditable
       ? e.target
@@ -814,7 +898,9 @@
     const selector = buildSelector(el);
 
     const existing = inputTimers.get(selector);
-    if (existing) clearTimeout(existing.tid);
+    if (existing) {
+      clearTimeout(existing.tid);
+    }
 
     const tid = setTimeout(() => {
       inputTimers.delete(selector);
@@ -825,7 +911,9 @@
   }
 
   function onChange(e) {
-    if (!isRecording || isWebPilotEl(e.target)) return;
+    if (!isRecording || isWebPilotEl(e.target)) {
+      return;
+    }
     const el = e.target;
 
     if (el.tagName === 'SELECT') {
@@ -870,9 +958,13 @@
   }
 
   function onRecordingContextMenu(e) {
-    if (!isRecording) return;
+    if (!isRecording) {
+      return;
+    }
     const targetEl = e.target;
-    if (isWebPilotEl(targetEl)) return;
+    if (isWebPilotEl(targetEl)) {
+      return;
+    }
     // Do NOT preventDefault — let the native browser menu open.
     // The "WebPilot: Extract…" / "WebPilot: Fill…" items are registered via
     // chrome.contextMenus in the background script and will trigger
@@ -882,7 +974,9 @@
   function showExtractModal(targetEl, initialMode = 'extract') {
     // Remove any existing modal
     const existingModal = document.getElementById('webpilot-extract-modal');
-    if (existingModal) existingModal.remove();
+    if (existingModal) {
+      existingModal.remove();
+    }
 
     // Generate a suggested variable name from the element
     const suggestedVarName = generateVariableName(targetEl);
@@ -934,13 +1028,13 @@
                   <label class="wp-extract-label">Choose EXTRACTED variable to insert</label>
                   <div class="wp-extract-vars-list">
                     ${hasVars
-                      ? availableVars.map(([varName, value]) => `
+    ? availableVars.map(([varName, value]) => `
                         <button class="wp-extract-var-btn" type="button" data-var="${varName}">
                           <span class="wp-var-name">[[extracted.${varName}]]</span>
                           <span class="wp-var-value">${value === null ? '(pending extraction)' : String(value ?? '').slice(0, 35)}</span>
                         </button>`).join('')
-                      : '<span class="wp-no-vars">No variables defined yet — extract one first.</span>'
-                    }
+    : '<span class="wp-no-vars">No variables defined yet — extract one first.</span>'
+  }
                   </div>
                 </div>
               </div>
@@ -973,7 +1067,9 @@
           modal.querySelectorAll('.wp-tab-pane').forEach(p => p.classList.remove('wp-tab-pane-active'));
           btn.classList.add('wp-tab-active');
           modal.querySelector(`.wp-tab-pane[data-pane="${btn.dataset.tab}"]`).classList.add('wp-tab-pane-active');
-          if (btn.dataset.tab === 'extract') { varInput?.focus(); varInput?.select(); }
+          if (btn.dataset.tab === 'extract') {
+            varInput?.focus(); varInput?.select();
+          }
         });
       });
 
@@ -983,23 +1079,29 @@
       // --- Extract action ---
       const doExtract = () => {
         const varName = varInput.value.trim();
-        if (!varName) { varInput.focus(); varInput.select(); return; }
+        if (!varName) {
+          varInput.focus(); varInput.select(); return;
+        }
         const extractType = Array.from(extractTypeRadios).find(r => r.checked)?.value || 'text';
         const selector    = buildSelector(targetEl);
         const label       = getLabel(targetEl) || labelFromSelector(selector);
         safeSend({
           type: 'RECORD_ACTION',
           action: { action: 'extract', selector, variable: varName, extractType, label,
-                    description: `Extract ${extractType} → {{${varName}}}`,
-                    elementHint: elementHint(targetEl) },
+            description: `Extract ${extractType} → {{${varName}}}`,
+            elementHint: elementHint(targetEl) },
         });
         flashRecorded(targetEl);
         cleanup();
       };
       modal.querySelector('.wp-extract-btn-extract')?.addEventListener('click', doExtract);
       varInput?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') doExtract();
-        if (e.key === 'Escape') cleanup();
+        if (e.key === 'Enter') {
+          doExtract();
+        }
+        if (e.key === 'Escape') {
+          cleanup();
+        }
       });
 
       // --- Fill action ---
@@ -1011,8 +1113,8 @@
           safeSend({
             type: 'RECORD_ACTION',
             action: { action: 'type', selector, value: `[[extracted.${varName}]]`, label,
-                      description: `Fill with [[extracted.${varName}]]`,
-                      elementHint: elementHint(targetEl) },
+              description: `Fill with [[extracted.${varName}]]`,
+              elementHint: elementHint(targetEl) },
           });
           flashRecorded(targetEl);
           cleanup();
@@ -1021,23 +1123,31 @@
 
       // Keyboard dismiss from overlay background
       modal.querySelector('.wp-extract-overlay').addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) cleanup();
+        if (e.target === e.currentTarget) {
+          cleanup();
+        }
       });
 
       // Auto-focus
-      if (startTab === 'extract') { varInput?.focus(); varInput?.select(); }
+      if (startTab === 'extract') {
+        varInput?.focus(); varInput?.select();
+      }
     });
   }
 
   /** Returns true for native date/time input types handled by the browser's date picker. */
   function isDateField(el) {
-    if (!el || el.tagName !== 'INPUT') return false;
+    if (!el || el.tagName !== 'INPUT') {
+      return false;
+    }
     const t = (el.type || '').toLowerCase();
     return ['date', 'datetime-local', 'time', 'month', 'week'].includes(t);
   }
 
   function isComboBoxInput(el) {
-    if (!el) return false;
+    if (!el) {
+      return false;
+    }
     const role = (el.getAttribute?.('role') || '').toLowerCase();
     const ariaAutocomplete = (el.getAttribute?.('aria-autocomplete') || '').toLowerCase();
     const hasListboxPopup = (el.getAttribute?.('aria-haspopup') || '').toLowerCase() === 'listbox';
@@ -1082,17 +1192,25 @@
       if (refs) {
         for (const id of refs.trim().split(/\s+/)) {
           const el = document.getElementById(id);
-          if (el?.tagName === 'INPUT') return el;
+          if (el?.tagName === 'INPUT') {
+            return el;
+          }
         }
       }
     }
     let container = calendarEl.parentElement;
     for (let i = 0; i < 6 && container; i++, container = container.parentElement) {
       for (const inp of container.querySelectorAll('input')) {
-        if (isDateField(inp)) return inp;
+        if (isDateField(inp)) {
+          return inp;
+        }
         const hint = (inp.name || inp.id || inp.className || '').toLowerCase();
-        if (/date|calendar|picker/.test(hint)) return inp;
-        if (inp.value && /^\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(inp.value)) return inp;
+        if (/date|calendar|picker/.test(hint)) {
+          return inp;
+        }
+        if (inp.value && /^\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(inp.value)) {
+          return inp;
+        }
       }
     }
     return null;
@@ -1130,31 +1248,59 @@
   function findStableFieldAncestor(el) {
     let node = el.parentElement;
     for (let i = 0; i < 6 && node && node !== document.body; i++, node = node.parentElement) {
-      if (node.id && /^[a-zA-Z][\w-]*$/.test(node.id)) return node;
-      if (node.dataset?.fieldId) return node;
-      if (node.dataset?.testid) return node;
-      if (node.dataset?.cy) return node;
-      if (node.getAttribute('aria-label')) return node;
-      if (node.getAttribute('aria-labelledby')) return node;
+      if (node.id && /^[a-zA-Z][\w-]*$/.test(node.id)) {
+        return node;
+      }
+      if (node.dataset?.fieldId) {
+        return node;
+      }
+      if (node.dataset?.testid) {
+        return node;
+      }
+      if (node.dataset?.cy) {
+        return node;
+      }
+      if (node.getAttribute('aria-label')) {
+        return node;
+      }
+      if (node.getAttribute('aria-labelledby')) {
+        return node;
+      }
     }
     return null;
   }
 
   function buildSelector(el) {
-    if (!el) return 'body';
+    if (!el) {
+      return 'body';
+    }
 
     // Stable id check FIRST — even document.body can have a meaningful id.
     // e.g. TinyMCE renders <body id="tinymce" contenteditable="true"> inside
     // an iframe; we must return '#tinymce' rather than 'body' in that case.
-    if (el.id && /^[a-zA-Z][\w-]*$/.test(el.id)) return `#${el.id}`;
+    if (el.id && /^[a-zA-Z][\w-]*$/.test(el.id)) {
+      return `#${el.id}`;
+    }
 
-    if (el === document.body) return 'body';
-    if (el.dataset?.testid) return `[data-testid="${CSS.escape(el.dataset.testid)}"]`;
-    if (el.dataset?.cy) return `[data-cy="${CSS.escape(el.dataset.cy)}"]`;
-    if (el.dataset?.fieldId) return `[data-field-id="${CSS.escape(el.dataset.fieldId)}"]`;
-    if (el.name) return `${el.tagName.toLowerCase()}[name="${CSS.escape(el.name)}"]`;
+    if (el === document.body) {
+      return 'body';
+    }
+    if (el.dataset?.testid) {
+      return `[data-testid="${CSS.escape(el.dataset.testid)}"]`;
+    }
+    if (el.dataset?.cy) {
+      return `[data-cy="${CSS.escape(el.dataset.cy)}"]`;
+    }
+    if (el.dataset?.fieldId) {
+      return `[data-field-id="${CSS.escape(el.dataset.fieldId)}"]`;
+    }
+    if (el.name) {
+      return `${el.tagName.toLowerCase()}[name="${CSS.escape(el.name)}"]`;
+    }
     const ariaLabel = el.getAttribute('aria-label');
-    if (ariaLabel) return `[aria-label="${CSS.escape(ariaLabel)}"]`;
+    if (ariaLabel) {
+      return `[aria-label="${CSS.escape(ariaLabel)}"]`;
+    }
 
     // For editable elements with no own stable identifier, try anchoring on a
     // stable ancestor (e.g. the wrapping div.jira-wikifield with an id or
@@ -1171,7 +1317,9 @@
         // selector; otherwise the anchor alone is enough (playback will find
         // the first editable child).
         const qualified = `${anchorSel} ${el.tagName.toLowerCase()}`;
-        if (document.querySelectorAll(qualified).length === 1) return qualified;
+        if (document.querySelectorAll(qualified).length === 1) {
+          return qualified;
+        }
         return anchorSel;
       }
     }
@@ -1188,22 +1336,28 @@
       const stableClasses = Array.from(node.classList)
         .filter((c) =>
           !OUR_CLASSES.has(c) &&
-          !/^(is-|has-|active|open|closed|focused|hover|selected|disabled)/.test(c)
+          !/^(is-|has-|active|open|closed|focused|hover|selected|disabled)/.test(c),
         )
         .slice(0, 2);
-      if (stableClasses.length) seg += '.' + stableClasses.map(CSS.escape).join('.');
+      if (stableClasses.length) {
+        seg += '.' + stableClasses.map(CSS.escape).join('.');
+      }
 
       // Disambiguate siblings of the same tag
       const parent = node.parentElement;
       if (parent) {
         const sameTags = Array.from(parent.children).filter((c) => c.tagName === node.tagName);
-        if (sameTags.length > 1) seg += `:nth-of-type(${sameTags.indexOf(node) + 1})`;
+        if (sameTags.length > 1) {
+          seg += `:nth-of-type(${sameTags.indexOf(node) + 1})`;
+        }
       }
 
       path.unshift(seg);
 
       // Stop once uniquely identifiable
-      if (document.querySelectorAll(path.join(' > ')).length === 1) break;
+      if (document.querySelectorAll(path.join(' > ')).length === 1) {
+        break;
+      }
 
       node = node.parentElement;
     }
@@ -1214,7 +1368,9 @@
   function getLabel(el) {
     // 1. Explicit accessible name on the element itself
     const ariaLabel = el.getAttribute('aria-label')?.trim();
-    if (ariaLabel) return ariaLabel;
+    if (ariaLabel) {
+      return ariaLabel;
+    }
 
     // 2. aria-labelledby
     const labelledBy = el.getAttribute('aria-labelledby');
@@ -1222,42 +1378,60 @@
       const text = labelledBy.split(/\s+/)
         .map(id => document.getElementById(id)?.textContent?.trim())
         .filter(Boolean).join(' ');
-      if (text) return text;
+      if (text) {
+        return text;
+      }
     }
 
     // 3. Associated <label for="id">
     if (el.id) {
       const label = document.querySelector(`label[for="${el.id}"]`);
-      if (label) return label.textContent.trim().replace(/\s+/g, ' ').slice(0, 60);
+      if (label) {
+        return label.textContent.trim().replace(/\s+/g, ' ').slice(0, 60);
+      }
     }
 
     // 4. Wrapping <label>
     const parentLabel = el.closest('label');
     if (parentLabel) {
       const text = parentLabel.textContent?.trim().replace(/\s+/g, ' ').slice(0, 60);
-      if (text) return text;
+      if (text) {
+        return text;
+      }
     }
 
     // 5. Standard HTML attributes
     const title       = el.getAttribute('title')?.trim();
-    if (title) return title;
+    if (title) {
+      return title;
+    }
     const placeholder = el.getAttribute('placeholder')?.trim();
-    if (placeholder) return placeholder;
+    if (placeholder) {
+      return placeholder;
+    }
     const name        = el.getAttribute('name')?.trim();
-    if (name) return name;
+    if (name) {
+      return name;
+    }
 
     // 6. Element's own visible text (buttons, links, etc.)
     const ownText = el.textContent?.trim().replace(/\s+/g, ' ').slice(0, 60);
-    if (ownText) return ownText;
+    if (ownText) {
+      return ownText;
+    }
 
     // 7. Walk up the DOM tree looking for a nearby human-readable label.
     //    Stops at BODY / our overlay root / after 6 levels.
     const nearbyLabel = _findNearbyLabel(el);
-    if (nearbyLabel) return nearbyLabel;
+    if (nearbyLabel) {
+      return nearbyLabel;
+    }
 
     // 8. value attribute (submit buttons)
     const val = el.getAttribute('value')?.trim();
-    if (val) return val;
+    if (val) {
+      return val;
+    }
 
     return '';
   }
@@ -1268,8 +1442,10 @@
    */
   function generateVariableName(el) {
     const label = getLabel(el);
-    if (!label) return 'extracted_value';
-    
+    if (!label) {
+      return 'extracted_value';
+    }
+
     // Convert to snake_case:
     // 1. Lowercase
     // 2. Replace spaces and hyphens with underscores
@@ -1285,12 +1461,12 @@
       .replace(/_+/g, '_')   // Collapse multiple underscores
       .replace(/^_+|_+$/g, '')  // Remove leading/trailing underscores
       .replace(/^[0-9]/, '');  // Remove leading digits
-    
+
     // Ensure it's not empty and doesn't start with number
     if (!varName || /^\d/.test(varName)) {
       varName = 'extracted_value';
     }
-    
+
     return varName;
   }
 
@@ -1306,26 +1482,38 @@
 
     let node = el.parentElement;
     for (let depth = 0; depth < 8 && node && node !== document.body; depth++, node = node.parentElement) {
-      if (OUR_IDS.has(node.id)) break;
+      if (OUR_IDS.has(node.id)) {
+        break;
+      }
 
       // Ancestor's own aria-label / title
       const al = node.getAttribute('aria-label')?.trim();
-      if (al) return al;
+      if (al) {
+        return al;
+      }
       const ti = node.getAttribute('title')?.trim();
-      if (ti) return ti;
+      if (ti) {
+        return ti;
+      }
 
       // Preceding siblings with short visible text (labels, headings, <p>, <span>)
       let sib = node.previousElementSibling;
       for (let s = 0; s < 3 && sib; s++, sib = sib.previousElementSibling) {
         const t = sib.textContent?.trim().replace(/\s+/g, ' ');
-        if (t && t.length > 1 && t.length < 80) return t.slice(0, 60);
+        if (t && t.length > 1 && t.length < 80) {
+          return t.slice(0, 60);
+        }
       }
 
       // Children of this ancestor that look like labels
       for (const child of node.querySelectorAll('label, [class*="label"], [class*="title"], legend, h1, h2, h3, h4, h5, h6, p')) {
-        if (child === el || child.contains(el)) continue;
+        if (child === el || child.contains(el)) {
+          continue;
+        }
         const t = child.textContent?.trim().replace(/\s+/g, ' ');
-        if (t && t.length > 1 && t.length < 80) return t.slice(0, 60);
+        if (t && t.length > 1 && t.length < 80) {
+          return t.slice(0, 60);
+        }
       }
     }
     return '';
@@ -1338,11 +1526,15 @@
   function labelFromSelector(selector) {
     // aria-label attribute in the selector string
     const ariaM = selector.match(/\[aria-label=["']?([^"'\]]+)["']?\]/);
-    if (ariaM) return ariaM[1].replace(/\\/g, '').trim();
+    if (ariaM) {
+      return ariaM[1].replace(/\\/g, '').trim();
+    }
 
     // #id in the selector
     const idM = selector.match(/#([\w-]+)/);
-    if (idM) return idM[1].replace(/-/g, ' ');
+    if (idM) {
+      return idM[1].replace(/-/g, ' ');
+    }
 
     // Walk the path segments right-to-left looking for a meaningful tag/class
     // e.g. "search-slide-toggle" → "search slide toggle"
@@ -1356,13 +1548,17 @@
       if (tagM) {
         const tag = tagM[1];
         // Skip purely structural tags
-        if (/^(div|span|ul|ol|li|section|article|main|aside|nav|header|footer|form)$/.test(tag)) continue;
+        if (/^(div|span|ul|ol|li|section|article|main|aside|nav|header|footer|form)$/.test(tag)) {
+          continue;
+        }
         // Convert kebab-case to words
         return tag.replace(/-/g, ' ');
       }
       // Fallback: first meaningful class on this segment
       const clsM = base.match(/\.([\w-]{4,})/);
-      if (clsM) return clsM[1].replace(/-/g, ' ').replace(/ng\w*/i, '').trim();
+      if (clsM) {
+        return clsM[1].replace(/-/g, ' ').replace(/ng\w*/i, '').trim();
+      }
     }
 
     // Last resort: truncate the raw selector
@@ -1501,7 +1697,9 @@
     return new Promise(resolve => {
       setTimeout(() => {
         overlay.style.opacity = '0';
-        setTimeout(() => { overlay.remove(); resolve(); }, 150);
+        setTimeout(() => {
+          overlay.remove(); resolve();
+        }, 150);
       }, durationMs);
     });
   }
@@ -1546,178 +1744,190 @@
     // After a navigate the new page may still be rendering — use a longer timeout
     const waitTimeout = afterNavigate ? 20000 : 6000;
     const el = await waitForElement(selector, waitTimeout);
-    if (!el) throw new Error(`Element not found: ${selector}`);
+    if (!el) {
+      throw new Error(`Element not found: ${selector}`);
+    }
 
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     await delay(200);
 
-    if (devMode) await showDevHighlight(el, step);
+    if (devMode) {
+      await showDevHighlight(el, step);
+    }
 
     switch (action) {
-      case 'click': {
-        // Suppress HTML5 form validation so clicks on submit/search buttons
-        // proceed even if a sibling input holds a type-incompatible value.
-        const form = el.closest('form');
-        const addedNoValidate = form && !form.hasAttribute('novalidate');
-        if (addedNoValidate) form.setAttribute('novalidate', '');
-        el.click();
-        if (addedNoValidate) form.removeAttribute('novalidate');
-        break;
+    case 'click': {
+      // Suppress HTML5 form validation so clicks on submit/search buttons
+      // proceed even if a sibling input holds a type-incompatible value.
+      const form = el.closest('form');
+      const addedNoValidate = form && !form.hasAttribute('novalidate');
+      if (addedNoValidate) {
+        form.setAttribute('novalidate', '');
       }
+      el.click();
+      if (addedNoValidate) {
+        form.removeAttribute('novalidate');
+      }
+      break;
+    }
 
-      case 'type': {
-        // If the selector resolved to a container (not directly editable),
-        // look for the actual editable descendant inside it.
-        // This handles wrappers like div.jira-wikifield that contain a
-        // contenteditable or textarea child.
-        let typeEl = el;
-        if (!el.isContentEditable && el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') {
-          typeEl = el.querySelector('[contenteditable="true"]') ??
+    case 'type': {
+      // If the selector resolved to a container (not directly editable),
+      // look for the actual editable descendant inside it.
+      // This handles wrappers like div.jira-wikifield that contain a
+      // contenteditable or textarea child.
+      let typeEl = el;
+      if (!el.isContentEditable && el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') {
+        typeEl = el.querySelector('[contenteditable="true"]') ??
                    el.querySelector('textarea') ??
                    el.querySelector('input:not([type="hidden"])') ??
                    el;
-        }
+      }
 
-        typeEl.focus();
-        await delay(50);
+      typeEl.focus();
+      await delay(50);
 
-        // Use the value as-is (it should already be resolved by background.js)
-        // Background resolves both {{template}} and [[extracted.var]] before sending here
-        let finalValue = value ?? '';
-        
-        // Fallback: if any [[extracted.varName]] patterns remain, resolve them here
-        const extractedMatches = finalValue.match(/\[\[extracted\.([a-zA-Z_][a-zA-Z0-9_]*)\]\]/g) || [];
-        if (extractedMatches.length > 0) {
-          console.log(`[WebPilot] Content script: resolving ${extractedMatches.length} extracted variables`);
-          extractedMatches.forEach((match) => {
-            try {
-              const varName = match.replace(/[\[\]extracted.]/g, '');
-              const extracted = getExtractedValue(varName);
-              if (extracted !== undefined && extracted !== null) {
-                const extractedStr = String(extracted);
-                console.log(`[WebPilot] Resolved [[extracted.${varName}]] → ${extractedStr.substring(0, 30)}`);
-                finalValue = finalValue.replace(match, extractedStr);
-              } else {
-                console.warn(`[WebPilot] Extracted variable not found or undefined: [[extracted.${varName}]]`);
-              }
-            } catch (err) {
-              console.error(`[WebPilot] Error resolving extracted variable ${match}:`, err);
-            }
-          });
-        }
-        
-        console.log(`[WebPilot] Type action: finalValue type=${typeof finalValue}, length=${String(finalValue).length}`);
+      // Use the value as-is (it should already be resolved by background.js)
+      // Background resolves both {{template}} and [[extracted.var]] before sending here
+      let finalValue = value ?? '';
 
-
-        if (typeEl.isContentEditable) {
-          // contenteditable (e.g. Jira rich-text editor, ProseMirror, Quill)
-          // Accept HTML for formatting (from AI output) — Jira will render <b>, <ul>, <a>, etc.
-          const htmlValue = String(finalValue ?? '');
-          // Select all existing content and replace with typed value
-          const selection = window.getSelection();
-          const range = document.createRange();
-          range.selectNodeContents(typeEl);
-          selection.removeAllRanges();
-          selection.addRange(range);
-          // Use execCommand for broad framework compatibility
+      // Fallback: if any [[extracted.varName]] patterns remain, resolve them here
+      const extractedMatches = finalValue.match(/\[\[extracted\.([a-zA-Z_][a-zA-Z0-9_]*)\]\]/g) || [];
+      if (extractedMatches.length > 0) {
+        console.log(`[WebPilot] Content script: resolving ${extractedMatches.length} extracted variables`);
+        extractedMatches.forEach((match) => {
           try {
-            document.execCommand('insertHTML', false, htmlValue);
+            const varName = match.replace(/[\[\]extracted.]/g, '');
+            const extracted = getExtractedValue(varName);
+            if (extracted !== undefined && extracted !== null) {
+              const extractedStr = String(extracted);
+              console.log(`[WebPilot] Resolved [[extracted.${varName}]] → ${extractedStr.substring(0, 30)}`);
+              finalValue = finalValue.replace(match, extractedStr);
+            } else {
+              console.warn(`[WebPilot] Extracted variable not found or undefined: [[extracted.${varName}]]`);
+            }
+          } catch (err) {
+            console.error(`[WebPilot] Error resolving extracted variable ${match}:`, err);
+          }
+        });
+      }
+
+      console.log(`[WebPilot] Type action: finalValue type=${typeof finalValue}, length=${String(finalValue).length}`);
+
+
+      if (typeEl.isContentEditable) {
+        // contenteditable (e.g. Jira rich-text editor, ProseMirror, Quill)
+        // Accept HTML for formatting (from AI output) — Jira will render <b>, <ul>, <a>, etc.
+        const htmlValue = String(finalValue ?? '');
+        // Select all existing content and replace with typed value
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(typeEl);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        // Use execCommand for broad framework compatibility
+        try {
+          document.execCommand('insertHTML', false, htmlValue);
+          typeEl.dispatchEvent(new InputEvent('input', { bubbles: true, data: htmlValue }));
+        } catch (err) {
+          console.warn('[WebPilot] execCommand failed, falling back to innerHTML:', err);
+          try {
+            typeEl.innerHTML = htmlValue;
             typeEl.dispatchEvent(new InputEvent('input', { bubbles: true, data: htmlValue }));
-          } catch (err) {
-            console.warn('[WebPilot] execCommand failed, falling back to innerHTML:', err);
-            try {
-              typeEl.innerHTML = htmlValue;
-              typeEl.dispatchEvent(new InputEvent('input', { bubbles: true, data: htmlValue }));
-            } catch (err2) {
-              console.error('[WebPilot] Failed to set contenteditable value:', err2);
-            }
+          } catch (err2) {
+            console.error('[WebPilot] Failed to set contenteditable value:', err2);
           }
-        } else if (typeEl instanceof HTMLSelectElement) {
-          // <select> element
-          try {
-            typeEl.value = String(finalValue ?? '');
-            typeEl.dispatchEvent(new Event('change', { bubbles: true }));
-          } catch (err) {
-            console.error('[WebPilot] Failed to set select value:', err);
-          }
-        } else {
-          // Regular <input> / <textarea>
-          try {
-            // For constrained input types (number, date, etc.) temporarily relax
-            // the type to 'text' so the browser accepts any string value
-            const CONSTRAINED = ['number','date','datetime-local','time','month','week','range','color'];
-            const savedType = (typeEl instanceof HTMLInputElement && CONSTRAINED.includes(typeEl.type.toLowerCase()))
-              ? typeEl.type : null;
-            
-            if (savedType) {
-              try { typeEl.type = 'text'; } catch (_) {}
-            }
+        }
+      } else if (typeEl instanceof HTMLSelectElement) {
+        // <select> element
+        try {
+          typeEl.value = String(finalValue ?? '');
+          typeEl.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch (err) {
+          console.error('[WebPilot] Failed to set select value:', err);
+        }
+      } else {
+        // Regular <input> / <textarea>
+        try {
+          // For constrained input types (number, date, etc.) temporarily relax
+          // the type to 'text' so the browser accepts any string value
+          const CONSTRAINED = ['number','date','datetime-local','time','month','week','range','color'];
+          const savedType = (typeEl instanceof HTMLInputElement && CONSTRAINED.includes(typeEl.type.toLowerCase()))
+            ? typeEl.type : null;
 
-            // Use native setter for maximum compatibility
-            const nativeSetter =
+          if (savedType) {
+            try {
+              typeEl.type = 'text';
+            } catch (_) {}
+          }
+
+          // Use native setter for maximum compatibility
+          const nativeSetter =
               Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
               Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-            
-            if (nativeSetter && (typeEl instanceof HTMLInputElement || typeEl instanceof HTMLTextAreaElement)) {
-              try {
-                nativeSetter.call(typeEl, String(finalValue ?? ''));
-              } catch (err) {
-                console.warn('[WebPilot] Native setter failed, using direct assignment:', err);
-                typeEl.value = String(finalValue ?? '');
-              }
-            } else {
+
+          if (nativeSetter && (typeEl instanceof HTMLInputElement || typeEl instanceof HTMLTextAreaElement)) {
+            try {
+              nativeSetter.call(typeEl, String(finalValue ?? ''));
+            } catch (err) {
+              console.warn('[WebPilot] Native setter failed, using direct assignment:', err);
               typeEl.value = String(finalValue ?? '');
             }
-
-            if (savedType) {
-              try { typeEl.type = savedType; } catch (_) {}
-            }
-
-            typeEl.dispatchEvent(new Event('input', { bubbles: true }));
-            typeEl.dispatchEvent(new Event('change', { bubbles: true }));
-          } catch (err) {
-            console.error('[WebPilot] Failed to set input/textarea value:', err);
-            throw new Error(`Failed to type value: ${err.message}`);
-          }
-        }
-        break;
-      }
-
-      case 'select': {
-        try {
-          if (el.tagName === 'SELECT') {
-            el.value = String(value ?? '');
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            break;
+          } else {
+            typeEl.value = String(finalValue ?? '');
           }
 
-          // Combobox/listbox widgets (e.g. Jira issue type)
-          await selectComboOption(el, String(value ?? ''));
-        } catch (err) {
-          console.error('[WebPilot] Failed to select option:', err);
-          throw new Error(`Failed to select: ${err.message}`);
-        }
-        break;
-      }
+          if (savedType) {
+            try {
+              typeEl.type = savedType;
+            } catch (_) {}
+          }
 
-      case 'key': {
-        try {
-          const keyName = String(value ?? 'Enter');
-          const init = { key: keyName, bubbles: true, cancelable: true };
-          el.focus();
-          await delay(50);
-          el.dispatchEvent(new KeyboardEvent('keydown', init));
-          el.dispatchEvent(new KeyboardEvent('keypress', init));
-          el.dispatchEvent(new KeyboardEvent('keyup', init));
+          typeEl.dispatchEvent(new Event('input', { bubbles: true }));
+          typeEl.dispatchEvent(new Event('change', { bubbles: true }));
         } catch (err) {
-          console.error('[WebPilot] Failed to dispatch key event:', err);
-          throw new Error(`Failed to dispatch key: ${err.message}`);
+          console.error('[WebPilot] Failed to set input/textarea value:', err);
+          throw new Error(`Failed to type value: ${err.message}`);
         }
-        break;
       }
+      break;
+    }
 
-      default:
-        throw new Error(`Unknown action: ${action}`);
+    case 'select': {
+      try {
+        if (el.tagName === 'SELECT') {
+          el.value = String(value ?? '');
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          break;
+        }
+
+        // Combobox/listbox widgets (e.g. Jira issue type)
+        await selectComboOption(el, String(value ?? ''));
+      } catch (err) {
+        console.error('[WebPilot] Failed to select option:', err);
+        throw new Error(`Failed to select: ${err.message}`);
+      }
+      break;
+    }
+
+    case 'key': {
+      try {
+        const keyName = String(value ?? 'Enter');
+        const init = { key: keyName, bubbles: true, cancelable: true };
+        el.focus();
+        await delay(50);
+        el.dispatchEvent(new KeyboardEvent('keydown', init));
+        el.dispatchEvent(new KeyboardEvent('keypress', init));
+        el.dispatchEvent(new KeyboardEvent('keyup', init));
+      } catch (err) {
+        console.error('[WebPilot] Failed to dispatch key event:', err);
+        throw new Error(`Failed to dispatch key: ${err.message}`);
+      }
+      break;
+    }
+
+    default:
+      throw new Error(`Unknown action: ${action}`);
     }
 
     // Visual confirmation flash
@@ -1745,7 +1955,9 @@
 
   async function selectComboOption(rootEl, optionText) {
     const text = String(optionText ?? '').trim();
-    if (!text) return;
+    if (!text) {
+      return;
+    }
 
     // Focus + click to open the dropdown
     rootEl.focus?.();
@@ -1790,17 +2002,23 @@
       // Standard ARIA options
       const ariaOption = Array.from(document.querySelectorAll('[role="option"]'))
         .find((n) => n.offsetParent !== null && normalize(n.textContent) === target);
-      if (ariaOption) return ariaOption;
+      if (ariaOption) {
+        return ariaOption;
+      }
 
       // AUI list items — the clickable element is the <a> inside <li>
       const auiAnchor = Array.from(document.querySelectorAll('.aui-list-item a, [class*="aui-list"] li a'))
         .find((n) => n.offsetParent !== null && normalize(n.textContent) === target);
-      if (auiAnchor) return auiAnchor;
+      if (auiAnchor) {
+        return auiAnchor;
+      }
 
       // AUI: partial match fallback (in case displayed text has extra whitespace)
       const auiPartial = Array.from(document.querySelectorAll('.aui-list-item a, [class*="aui-list"] li a'))
         .find((n) => n.offsetParent !== null && normalize(n.textContent).includes(target));
-      if (auiPartial) return auiPartial;
+      if (auiPartial) {
+        return auiPartial;
+      }
 
       return null;
     };
@@ -1828,7 +2046,9 @@
   function waitForElement(selector, timeoutMs) {
     return new Promise((resolve) => {
       const existing = document.querySelector(selector);
-      if (existing) return resolve(existing);
+      if (existing) {
+        return resolve(existing);
+      }
 
       const observer = new MutationObserver(() => {
         const found = document.querySelector(selector);

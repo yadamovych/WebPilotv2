@@ -83,16 +83,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Event bindings
 // ---------------------------------------------------------------------------
 function bindStaticEvents() {
-    dom.btnStop?.addEventListener('click', stopPlayback);
+  dom.btnStop?.addEventListener('click', stopPlayback);
   // Tab switching
   dom.tabBtns.forEach((btn) =>
-    btn.addEventListener('click', () => switchTab(btn.dataset.tab))
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab)),
   );
 
   // Record tab
   dom.btnRecord.addEventListener('click', toggleRecording);
   dom.btnClear.addEventListener('click', () => {
-    try { chrome.runtime.sendMessage({ type: 'CLEAR_STEPS' }).catch(() => {}); } catch (_) {}
+    try {
+      chrome.runtime.sendMessage({ type: 'CLEAR_STEPS' }).catch(() => {});
+    } catch (_) {}
     state.steps = [];
     renderSteps();
   });
@@ -118,7 +120,9 @@ function bindStaticEvents() {
 
   // ESC stops any active recording (main Record tab or workflow editor)
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape') {
+      return;
+    }
     if (state.recording) {
       // Main Record tab
       stopRecording();
@@ -129,7 +133,9 @@ function bindStaticEvents() {
   });
 
   // Background → popup messages (e.g. live step updates while popup is open)
-  try { chrome.runtime.onMessage.addListener(onBackgroundMessage); } catch (_) {}
+  try {
+    chrome.runtime.onMessage.addListener(onBackgroundMessage);
+  } catch (_) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -201,7 +207,7 @@ async function checkServerHealth(showResult = false) {
       showStatus(
         dom.settingsStatus,
         ok ? `Server online (${url})` : `Server returned ${resp.status}`,
-        ok
+        ok,
       );
     }
   } catch {
@@ -225,7 +231,7 @@ async function loadTemplates() {
 
 function renderTemplates() {
   const list = Object.values(state.templates).sort(
-    (a, b) => (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0)
+    (a, b) => (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0),
   );
 
   dom.templatesList.innerHTML = '';
@@ -299,14 +305,20 @@ function openJsonModal(tpl) {
   const close = () => modal.classList.add('hidden');
   document.getElementById('json-modal-close').onclick  = close;
   document.getElementById('json-modal-close2').onclick = close;
-  modal.addEventListener('click', (e) => { if (e.target === modal) close(); }, { once: true });
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      close();
+    }
+  }, { once: true });
 
   document.getElementById('json-modal-copy').onclick = async () => {
     await navigator.clipboard.writeText(body.value);
     const btn = document.getElementById('json-modal-copy');
     const orig = btn.textContent;
     btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = orig; }, 1500);
+    setTimeout(() => {
+      btn.textContent = orig;
+    }, 1500);
   };
 
   document.getElementById('json-modal-save').onclick = async () => {
@@ -334,7 +346,9 @@ function openJsonModal(tpl) {
 // ---------------------------------------------------------------------------
 function toggleTemplateEditor(tpl, li) {
   const existing = li.querySelector('.tpl-editor');
-  if (existing) { existing.remove(); li.classList.remove('editing'); return; }
+  if (existing) {
+    existing.remove(); li.classList.remove('editing'); return;
+  }
   li.classList.add('editing');
   openTemplateEditor(tpl, li);
 }
@@ -433,7 +447,9 @@ function openTemplateEditor(tpl, li) {
 
   addBtn.addEventListener('click', () => {
     addForm.classList.toggle('hidden');
-    if (!addForm.classList.contains('hidden')) addFormSel.focus();
+    if (!addForm.classList.contains('hidden')) {
+      addFormSel.focus();
+    }
   });
 
   addForm.querySelector('.add-form-cancel').addEventListener('click', () => {
@@ -446,8 +462,12 @@ function openTemplateEditor(tpl, li) {
     const value    = addFormVal.value.trim();
     const label    = addFormLabel.value.trim();
 
-    if (!NO_SELECTOR.has(action) && action !== 'key' && !selector) { addFormSel.focus(); return; }
-    if (!NO_VALUE.has(action) && !value) { addFormVal.focus(); return; }
+    if (!NO_SELECTOR.has(action) && action !== 'key' && !selector) {
+      addFormSel.focus(); return;
+    }
+    if (!NO_VALUE.has(action) && !value) {
+      addFormVal.focus(); return;
+    }
 
     const step = {
       action,
@@ -455,9 +475,15 @@ function openTemplateEditor(tpl, li) {
       timestamp: Date.now(),
       description: label || [action, selector, value].filter(Boolean).join(' → '),
     };
-    if (label)    step.label    = label;
-    if (selector) step.selector = selector;
-    if (value)    step.value    = value;
+    if (label)    {
+      step.label    = label;
+    }
+    if (selector) {
+      step.selector = selector;
+    }
+    if (value)    {
+      step.value    = value;
+    }
 
     draft.steps.push(step);
     addFormSel.value = ''; addFormVal.value = ''; addFormLabel.value = '';
@@ -511,7 +537,9 @@ function openTemplateEditor(tpl, li) {
 
   // Live step updates while recording: append to draft as they come in
   editor._onStepsUpdated = (steps) => {
-    if (!editorRecording) return;
+    if (!editorRecording) {
+      return;
+    }
     // Replace draft steps beyond original count with fresh background steps
     const origCount = tpl.steps.length;
     draft.steps = draft.steps.slice(0, origCount).concat(steps);
@@ -524,9 +552,13 @@ function openTemplateEditor(tpl, li) {
 
   editor.querySelector('.tpl-save').addEventListener('click', async () => {
     // Stop any active recording before saving
-    if (editorRecording) recBtn.click();
+    if (editorRecording) {
+      recBtn.click();
+    }
     draft.name = editor.querySelector('.tpl-name-input').value.trim();
-    if (!draft.name) { editor.querySelector('.tpl-name-input').focus(); return; }
+    if (!draft.name) {
+      editor.querySelector('.tpl-name-input').focus(); return;
+    }
     await saveEditedTemplate(draft);
     editor.remove();
     li.classList.remove('editing');
@@ -582,8 +614,8 @@ function buildEditorStep(step, index, draft, refresh) {
         <div class="tpl-val-row">
           <input class="tpl-step-val" type="text" value="${esc(step.value ?? '')}" placeholder="${isDate ? 'Date value or {{template}} or [[extracted.var]] (e.g. YYYY-MM-DD)' : 'Value ({{template}} for AI or [[extracted.var]] for extraction)'}" />
           ${varName && !alreadyVar
-            ? `<button class="var-suggest-btn tpl-var-btn" data-var="${esc(varName)}">{{${esc(varName)}}}</button>`
-            : ''}
+    ? `<button class="var-suggest-btn tpl-var-btn" data-var="${esc(varName)}">{{${esc(varName)}}}</button>`
+    : ''}
         </div>
       ` : ''}
       ${isSelect ? `
@@ -650,10 +682,14 @@ function buildEditorStep(step, index, draft, refresh) {
   // Hover the step row → highlight the corresponding element on the active tab
   let _hlTab = null;
   li.addEventListener('mouseenter', async () => {
-    if (!step.selector) return;
+    if (!step.selector) {
+      return;
+    }
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab?.id) return;
+      if (!tab?.id) {
+        return;
+      }
       _hlTab = tab.id;
       chrome.tabs.sendMessage(tab.id, {
         type: 'HIGHLIGHT_STEP_ELEMENT',
@@ -664,8 +700,12 @@ function buildEditorStep(step, index, draft, refresh) {
     } catch (_) {}
   });
   li.addEventListener('mouseleave', () => {
-    if (_hlTab == null) return;
-    try { chrome.tabs.sendMessage(_hlTab, { type: 'UNHIGHLIGHT_STEP_ELEMENT' }).catch(() => {}); } catch (_) {}
+    if (_hlTab == null) {
+      return;
+    }
+    try {
+      chrome.tabs.sendMessage(_hlTab, { type: 'UNHIGHLIGHT_STEP_ELEMENT' }).catch(() => {});
+    } catch (_) {}
     _hlTab = null;
   });
 
@@ -718,13 +758,17 @@ function buildEditorStep(step, index, draft, refresh) {
   });
 
   li.querySelector('.tpl-move-up').addEventListener('click', () => {
-    if (index === 0) return;
+    if (index === 0) {
+      return;
+    }
     [draft.steps[index - 1], draft.steps[index]] = [draft.steps[index], draft.steps[index - 1]];
     refresh();
   });
 
   li.querySelector('.tpl-move-down').addEventListener('click', () => {
-    if (index === draft.steps.length - 1) return;
+    if (index === draft.steps.length - 1) {
+      return;
+    }
     [draft.steps[index], draft.steps[index + 1]] = [draft.steps[index + 1], draft.steps[index]];
     refresh();
   });
@@ -736,13 +780,19 @@ function buildEditorStep(step, index, draft, refresh) {
 
   // Drag-to-reorder — only via the drag handle
   const handle = li.querySelector('.tpl-drag-handle');
-  handle.addEventListener('mousedown', () => { li.draggable = true; });
+  handle.addEventListener('mousedown', () => {
+    li.draggable = true;
+  });
   li.addEventListener('dragstart', (e) => {
     e.dataTransfer.setData('text/plain', String(index));
     li.classList.add('dragging');
   });
-  li.addEventListener('dragend', () => { li.draggable = false; li.classList.remove('dragging'); });
-  li.addEventListener('dragover', (e) => { e.preventDefault(); li.classList.add('drag-over'); });
+  li.addEventListener('dragend', () => {
+    li.draggable = false; li.classList.remove('dragging');
+  });
+  li.addEventListener('dragover', (e) => {
+    e.preventDefault(); li.classList.add('drag-over');
+  });
   li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
   li.addEventListener('drop', (e) => {
     e.preventDefault();
@@ -790,7 +840,7 @@ function openPlayPanel(tpl) {
       extractedVars.add(name);
     }
   }
-  
+
   let hint = document.getElementById('play-vars-hint');
   if (!hint) {
     hint = document.createElement('p');
@@ -798,16 +848,18 @@ function openPlayPanel(tpl) {
     hint.className = 'play-vars-hint';
     dom.userRequest.parentElement.after(hint);
   }
-  
+
   let hintText = '';
   if (templateVars.size > 0) {
     hintText += `Template variables: ${[...templateVars].map(v => `{{${v}}}`).join(', ')}`;
   }
   if (extractedVars.size > 0) {
-    if (hintText) hintText += ' | ';
+    if (hintText) {
+      hintText += ' | ';
+    }
     hintText += `Extracted variables: ${[...extractedVars].map(v => `[[extracted.${v}]]`).join(', ')}`;
   }
-  
+
   if (hintText) {
     hint.textContent = '⚠ ' + hintText + ' — Mention template variables in your prompt';
     hint.classList.remove('hidden');
@@ -824,10 +876,14 @@ function closePlayPanel() {
 }
 
 async function executeTemplate() {
-  if (!state.selectedTemplateId) return;
+  if (!state.selectedTemplateId) {
+    return;
+  }
 
   const userRequest = dom.userRequest.value.trim();
-  if (!userRequest) { dom.userRequest.focus(); return; }
+  if (!userRequest) {
+    dom.userRequest.focus(); return;
+  }
 
   dom.btnExecute.disabled = true;
   if (dom.btnStop) {
@@ -869,10 +925,14 @@ async function executeTemplate() {
 }
 
 async function stopPlayback() {
-  if (dom.btnStop) dom.btnStop.disabled = true;
+  if (dom.btnStop) {
+    dom.btnStop.disabled = true;
+  }
   setStatus(dom.playStatus, 'Stopping…', '');
   await sendMsg({ type: 'STOP_PLAYBACK' });
-  if (dom.btnStop) dom.btnStop.classList.add('hidden');
+  if (dom.btnStop) {
+    dom.btnStop.classList.add('hidden');
+  }
   dom.btnExecute.disabled = false;
   dom.executeLabel.textContent = '▶ Execute with AI';
 }
@@ -880,7 +940,9 @@ async function stopPlayback() {
 async function deleteTemplate(id) {
   await sendMsg({ type: 'DELETE_TEMPLATE', id });
   delete state.templates[id];
-  if (state.selectedTemplateId === id) closePlayPanel();
+  if (state.selectedTemplateId === id) {
+    closePlayPanel();
+  }
   renderTemplates();
 }
 
@@ -889,7 +951,9 @@ function confirmDeleteTemplate(id, btnEl) {
   const li = btnEl.closest('.template-item');
   // If confirm row already visible, cancel it (toggle behaviour)
   const existing = li.querySelector('.delete-confirm-row');
-  if (existing) { existing.remove(); return; }
+  if (existing) {
+    existing.remove(); return;
+  }
 
   const row = document.createElement('div');
   row.className = 'delete-confirm-row';
@@ -909,7 +973,9 @@ function confirmDeleteTemplate(id, btnEl) {
 async function syncRecordingState() {
   try {
     const res = await sendMsg({ type: 'GET_STATE' });
-    if (!res?.state) return;
+    if (!res?.state) {
+      return;
+    }
     state.recording = res.state.recording ?? false;
     state.steps = res.state.steps ?? [];
     applyRecordingUI();
@@ -925,7 +991,9 @@ async function startRecording() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const res = await sendMsg({ type: 'START_RECORDING', tabId: tab.id });
-    if (!res?.success) throw new Error(res?.error ?? 'Failed to start');
+    if (!res?.success) {
+      throw new Error(res?.error ?? 'Failed to start');
+    }
     state.recording = true;
     applyRecordingUI();
   } catch (err) {
@@ -1022,12 +1090,18 @@ function buildStepItem(step, index) {
 
   // Drag-to-reorder — only via the drag handle
   const handle = li.querySelector('.step-drag-handle');
-  handle.addEventListener('mousedown', () => { li.draggable = true; });
+  handle.addEventListener('mousedown', () => {
+    li.draggable = true;
+  });
   li.addEventListener('dragstart', (e) => {
     e.dataTransfer.setData('text/plain', String(index));
   });
-  li.addEventListener('dragend', () => { li.draggable = false; });
-  li.addEventListener('dragover',  (e) => { e.preventDefault(); li.classList.add('drag-over'); });
+  li.addEventListener('dragend', () => {
+    li.draggable = false;
+  });
+  li.addEventListener('dragover',  (e) => {
+    e.preventDefault(); li.classList.add('drag-over');
+  });
   li.addEventListener('dragleave', ()  => li.classList.remove('drag-over'));
   li.addEventListener('drop', (e) => {
     e.preventDefault();
@@ -1049,21 +1123,35 @@ function editStep(index, liEl) {
 
   // Toggle: if form already open, close it
   const existing = liEl.querySelector('.step-edit-form');
-  if (existing) { existing.remove(); return; }
+  if (existing) {
+    existing.remove(); return;
+  }
 
   const ALL_ACTIONS = ['click', 'type', 'select', 'navigate', 'wait', 'key', 'extract'];
   const actionHasValue = (a) => ['type', 'select', 'navigate', 'key'].includes(a);
   const actionHasVariable = (a) => a === 'extract';
   const getValueLabel = (a) => {
-    if (a === 'navigate') return 'URL';
-    if (a === 'key')      return 'Key';
-    if (a === 'select')   return 'Option';
+    if (a === 'navigate') {
+      return 'URL';
+    }
+    if (a === 'key')      {
+      return 'Key';
+    }
+    if (a === 'select')   {
+      return 'Option';
+    }
     return 'Value <span class="label-hint">({{template}} for AI variables or [[extracted.var]] for page extraction)</span>';
   };
   const getValuePlaceholder = (a) => {
-    if (a === 'navigate') return 'https://example.com';
-    if (a === 'key')      return 'Enter, Tab, Escape, Space…';
-    if (a === 'select')   return 'Option to select…';
+    if (a === 'navigate') {
+      return 'https://example.com';
+    }
+    if (a === 'key')      {
+      return 'Enter, Tab, Escape, Space…';
+    }
+    if (a === 'select')   {
+      return 'Option to select…';
+    }
     return '';
   };
 
@@ -1127,17 +1215,27 @@ function editStep(index, liEl) {
     const val    = actionHasValue(action) ? (valInput.value ?? '') : undefined;
     const variable = actionHasVariable(action) ? (varInput.value ?? '') : undefined;
     const extractType = actionHasVariable(action) ? (extractTypeSelect.value ?? 'text') : undefined;
-    
+
     state.steps[index] = { ...step, action, description: desc };
-    if (val !== undefined) state.steps[index].value = val;
-    if (variable !== undefined) state.steps[index].variable = variable;
-    if (extractType !== undefined) state.steps[index].extractType = extractType;
+    if (val !== undefined) {
+      state.steps[index].value = val;
+    }
+    if (variable !== undefined) {
+      state.steps[index].variable = variable;
+    }
+    if (extractType !== undefined) {
+      state.steps[index].extractType = extractType;
+    }
     sendMsgSafe({ type: 'UPDATE_STEPS', steps: state.steps });
     renderSteps();
   });
   form.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') form.querySelector('.save-edit').click();
-    if (e.key === 'Escape') form.remove();
+    if (e.key === 'Enter') {
+      form.querySelector('.save-edit').click();
+    }
+    if (e.key === 'Escape') {
+      form.remove();
+    }
   });
 }
 
@@ -1146,11 +1244,17 @@ function editStep(index, liEl) {
 // ---------------------------------------------------------------------------
 async function saveTemplate() {
   const name = dom.templateName.value.trim();
-  if (!name) { dom.templateName.focus(); return; }
-  if (state.steps.length === 0) return;
+  if (!name) {
+    dom.templateName.focus(); return;
+  }
+  if (state.steps.length === 0) {
+    return;
+  }
 
   // Stop recording automatically when saving
-  if (state.recording) await stopRecording();
+  if (state.recording) {
+    await stopRecording();
+  }
 
   // Strip internal metadata before saving
   const cleanSteps = state.steps.map(({ id: _id, timestamp: _ts, ...rest }) => rest);
@@ -1194,7 +1298,7 @@ function onBackgroundMessage(message) {
       setStatus(
         dom.playStatus,
         `Running step ${message.currentIndex + 1} / ${message.total}${retry}…`,
-        ''
+        '',
       );
     }
   }
@@ -1204,7 +1308,9 @@ function onBackgroundMessage(message) {
 // Helpers
 // ---------------------------------------------------------------------------
 function sendMsg(msg) {
-  if (!chrome.runtime?.id) return Promise.resolve(null);
+  if (!chrome.runtime?.id) {
+    return Promise.resolve(null);
+  }
   try {
     return chrome.runtime.sendMessage(msg).catch((err) => {
       console.error('sendMessage error:', err);
@@ -1217,8 +1323,12 @@ function sendMsg(msg) {
 
 /** Fire-and-forget send — swallows context-invalidated errors. */
 function sendMsgSafe(msg) {
-  if (!chrome.runtime?.id) return;
-  try { chrome.runtime.sendMessage(msg).catch(() => {}); } catch (_) {}
+  if (!chrome.runtime?.id) {
+    return;
+  }
+  try {
+    chrome.runtime.sendMessage(msg).catch(() => {});
+  } catch (_) {}
 }
 
 function esc(str) {
@@ -1232,18 +1342,28 @@ function esc(str) {
  * step identity chip shown inline in the workflow editor.
  */
 function shortSelector(sel) {
-  if (!sel) return '';
+  if (!sel) {
+    return '';
+  }
   // [aria-label="..."] → show the label text
   const ariaM = sel.match(/\[aria-label=["']([^"']+)["']\]/);
-  if (ariaM) return `aria: "${ariaM[1].slice(0, 35)}"`;
+  if (ariaM) {
+    return `aria: "${ariaM[1].slice(0, 35)}"`;
+  }
   // #id → short, use as-is
-  if (/^#[\w-]+$/.test(sel)) return sel;
+  if (/^#[\w-]+$/.test(sel)) {
+    return sel;
+  }
   // [name=...] → compact form
   const nameM = sel.match(/\[name=["']?([^"'\]]+)["']?\]/);
-  if (nameM) return `[name=${nameM[1].slice(0, 30)}]`;
+  if (nameM) {
+    return `[name=${nameM[1].slice(0, 30)}]`;
+  }
   // [data-testid=...]
   const testM = sel.match(/\[data-testid=["']?([^"'\]]+)["']?\]/);
-  if (testM) return `[testid=${testM[1].slice(0, 30)}]`;
+  if (testM) {
+    return `[testid=${testM[1].slice(0, 30)}]`;
+  }
   // last segment of a descendant path
   const last = sel.split('>').pop().trim();
   return last.length <= 42 ? last : last.slice(0, 39) + '…';
@@ -1256,7 +1376,9 @@ function setStatus(el, text, cls) {
 
 function showStatus(el, text, success) {
   setStatus(el, text, success ? 'success' : 'error');
-  setTimeout(() => { el.className = 'status-msg hidden'; }, 3000);
+  setTimeout(() => {
+    el.className = 'status-msg hidden';
+  }, 3000);
 }
 
 // Expose key symbols so sidepanel.js (loaded after this file) can reach them

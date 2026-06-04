@@ -8,7 +8,9 @@
   const spPrompt = document.getElementById('sp-quick-prompt');
   const spRunBtn = document.getElementById('sp-quick-run');
 
-  if (!spPrompt || !spRunBtn) return;   // not the side panel
+  if (!spPrompt || !spRunBtn) {
+    return;
+  }   // not the side panel
 
   // Convenience accessors for symbols exported by popup.js
   const getState = () => window.__webpilotState;
@@ -21,14 +23,18 @@
   // Keep the quick-prompt in sync with the play-panel textarea.
   spPrompt.addEventListener('input', () => {
     const userRequest = document.getElementById('user-request');
-    if (userRequest) userRequest.value = spPrompt.value;
+    if (userRequest) {
+      userRequest.value = spPrompt.value;
+    }
     refreshRunBtn();
   });
 
   // Run button triggers the same executeTemplate() from popup.js
   spRunBtn.addEventListener('click', () => {
     const userRequest = document.getElementById('user-request');
-    if (userRequest) userRequest.value = spPrompt.value;
+    if (userRequest) {
+      userRequest.value = spPrompt.value;
+    }
     execTemplate();
   });
 
@@ -43,7 +49,9 @@
   if (playPanel) {
     const observer = new MutationObserver(() => {
       const active = !playPanel.classList.contains('hidden');
-      if (active) spPrompt.focus();
+      if (active) {
+        spPrompt.focus();
+      }
       refreshRunBtn();
     });
     observer.observe(playPanel, { attributes: true, attributeFilter: ['class'] });

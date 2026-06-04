@@ -1,0 +1,177 @@
+name: Extension Error Checker & Issue Creator
+
+on:
+  schedule:
+    # Run every 6 hours to check for extension errors
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      severity:
+        description: 'Filter errors by severity'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - critical
+          - high
+          - medium
+
+jobs:
+  check-extension-errors:
+    name: Check Extension Errors
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Lint extension with ESLint (if configured)
+        id: eslint
+        continue-on-error: true
+        run: |
+          cd extension
+          if [ -f ".eslintrc.json" ] || [ -f ".eslintrc.js" ] || [ -f "package.json" ]; then
+            npm install --no-save 2>/dev/null || true
+            npm run lint -- --format json --output-file lint-report.json 2>/dev/null || true
+            if [ -f "lint-report.json" ]; then
+              echo "LINT_ISSUES=true" >> $GITHUB_OUTPUT
+              cat lint-report.json
+            fi
+          fi
+
+      - name: Check for common JavaScript errors
+        id: analysis
+        continue-on-error: true
+        run: |
+          cd extension
+          
+          # Create analysis report
+          {
+            echo "# Extension Code Analysis"
+            echo ""
+            
+            # Check for unhandled promise rejections
+            echo "## Unhandled Promise Rejections"
+            grep -r "\.then\|\.catch" *.js 2>/dev/null | grep -v "\.catch()" | head -5 || echo "None found"
+            echo ""
+            
+            # Check for missing error handlers
+            echo "## Potential Missing Error Handlers"
+            grep -r "chrome\." *.js 2>/dev/null | grep -v "try\|catch\|safeSend\|safeChrome" | head -5 || echo "None found"
+            echo ""
+            
+            # Check for console.* calls (should be removed in production)
+            echo "## Debug Statements"
+            grep -r "console\.\(log\|warn\|debug\)" *.js 2>/dev/null | head -5 || echo "None found"
+            echo ""
+            
+          } > analysis-report.md
+          cat analysis-report.md
+          echo "ANALYSIS_COMPLETE=true" >> $GITHUB_OUTPUT
+
+      - name: Upload analysis report
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-analysis
+          path: |
+            extension/lint-report.json
+            extension/analysis-report.md
+          retention-days: 30
+
+      - name: Create GitHub Issue for errors
+        if: steps.eslint.outcome == 'failure' || steps.analysis.outcome != 'skipped'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            let errorDetails = '';
+            let errorCount = 0;
+            
+            // Check for lint report
+            try {
+              const lintPath = path.join(process.env.GITHUB_WORKSPACE, 'extension/lint-report.json');
+              if (fs.existsSync(lintPath)) {
+                const lintData = JSON.parse(fs.readFileSync(lintPath, 'utf8'));
+                errorCount = lintData.reduce((sum, file) => sum + (file.messages || []).length, 0);
+                
+                errorDetails += '## Lint Errors\n\n';
+                lintData.forEach(file => {
+                  if (file.messages.length > 0) {
+                    errorDetails += `### ${file.filePath}\n`;
+                    file.messages.slice(0, 5).forEach(msg => {
+                      errorDetails += `- Line ${msg.line}: ${msg.message} (${msg.ruleId})\n`;
+                    });
+                  }
+                });
+              }
+            } catch (e) {
+              console.log('Could not parse lint report:', e.message);
+            }
+            
+            // Check for analysis report
+            try {
+              const analysisPath = path.join(process.env.GITHUB_WORKSPACE, 'extension/analysis-report.md');
+              if (fs.existsSync(analysisPath)) {
+                errorDetails += '\n' + fs.readFileSync(analysisPath, 'utf8');
+              }
+            } catch (e) {
+              console.log('Could not read analysis report:', e.message);
+            }
+            
+            if (errorDetails) {
+              const title = `🐛 Extension errors detected (${errorCount} issues)`;
+              const body = `## Automated Extension Error Report\n\n**Timestamp:** ${new Date().toISOString()}\n**Branch:** ${process.env.GITHUB_REF}\n\n${errorDetails}\n\n---\n*This issue was automatically created by the Extension Error Checker workflow. Review and fix the errors above.*`;
+              
+              // Check if similar issue already exists
+              const issues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: ['extension-errors'],
+              });
+              
+              const existingIssue = issues.data.find(i => i.title.includes('Extension errors detected'));
+              
+              if (existingIssue) {
+                // Update existing issue
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existingIssue.number,
+                  body: body,
+                });
+                console.log(`Updated issue #${existingIssue.number}`);
+              } else {
+                // Create new issue
+                const response = await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: title,
+                  body: body,
+                  labels: ['extension-errors', 'bug', 'automated'],
+                  assignees: [],
+                });
+                console.log(`Created issue #${response.data.number}`);
+              }
+            } else {
+              console.log('No extension errors detected');
+            }
+
+      - name: Report summary
+        if: always()
+        run: |
+          echo "## Extension Error Check Summary"
+          echo "- ESLint check: ${{ steps.eslint.outcome }}"
+          echo "- Code analysis: ${{ steps.analysis.outcome }}"
+          echo ""
+          echo "Artifacts available in: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
