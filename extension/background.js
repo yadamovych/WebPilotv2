@@ -516,9 +516,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
               const varName = key.replace('extracted_', '');
               const pattern = `[[extracted.${varName}]]`;
               if (resolved.includes(pattern)) {
-                const before = resolved;
                 resolved = resolved.replaceAll(pattern, String(val ?? ''));
-                // Pattern replacement occurred
               }
             }
           }
@@ -584,7 +582,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
             step: currentStep,
             retryAttempt: attempt,
             retryMax: MAX_RETRIES,
-          }).catch((err) => {
+          }).catch((_err) => {
             // Popup may be closed, silently ignore
           });
           await delay(RETRY_DELAY_MS);
