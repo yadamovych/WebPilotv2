@@ -7,23 +7,36 @@
 // Open the side panel instead of a popup when the toolbar icon is clicked
 // ---------------------------------------------------------------------------
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((err) => {
     // API unavailable in older Chrome versions — gracefully ignore.
+    console.warn('[WebPilot] sidePanel.setPanelBehavior not available:', err.message);
   });
 
   // Context menu items — shown on every page element.
   // Two entries: one to extract text/value into a new {{variable}},
   // one to fill the element with an existing variable.
-  chrome.contextMenus.removeAll(() => {
+  chrome.contextMenus.removeAll((err) => {
+    if (chrome.runtime.lastError) {
+      console.warn('[WebPilot] Failed to remove context menus:', chrome.runtime.lastError.message);
+      return;
+    }
     chrome.contextMenus.create({
       id:       'webpilot-extract',
       title:    'WebPilot: Extract as variable…',
       contexts: ['all'],
+    }, (err) => {
+      if (chrome.runtime.lastError) {
+        console.error('[WebPilot] Failed to create extract menu:', chrome.runtime.lastError.message);
+      }
     });
     chrome.contextMenus.create({
       id:       'webpilot-fill',
       title:    'WebPilot: Fill with variable…',
       contexts: ['all'],
+    }, (err) => {
+      if (chrome.runtime.lastError) {
+        console.error('[WebPilot] Failed to create fill menu:', chrome.runtime.lastError.message);
+      }
     });
   });
 });
@@ -39,7 +52,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     mode,
     // selectionText is populated by Chrome when text is highlighted
     selectionText: info.selectionText ?? '',
-  }).catch(() => {});
+  }).catch((err) => {
+    console.warn('[WebPilot] Failed to send context menu message:', err.message);
+  });
 });
 
 /** @type {{ recording: boolean, recordingTabId: number|null, steps: object[] }} */
@@ -211,11 +226,10 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
         auto: true, // Mark as auto-generated
       });
 
-      // eslint-disable-next-line no-console
-      console.log(`[WebPilot] Auto-recorded navigate step to: ${url}`);
-
       // Notify popup that steps have changed
-      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
+      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch((err) => {
+        console.warn('[WebPilot] Failed to notify steps updated:', err.message);
+      });
 
       // Update recording tab to the new tab
       STATE.recordingTabId = tabId;
@@ -225,7 +239,7 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
       await ensureContentScript(tabId);
       await broadcastToFrames(tabId, { type: 'START_RECORDING' });
     } catch (err) {
-      console.warn('[WebPilot] Error handling tab switch during recording:', err);
+      console.error('[WebPilot] Error handling tab switch during recording:', err.message);
     }
   }
 });
@@ -273,7 +287,9 @@ async function handleStartRecording(tabId, { noAutoNavigate = false } = {}) {
         timestamp: Date.now(),
         auto: true,
       });
-      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
+      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch((err) => {
+        console.warn('[WebPilot] Failed to notify steps updated:', err.message);
+      });
     }
 
     persistState();
@@ -505,8 +521,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
                 resolved = resolved.replaceAll(pattern, String(val ?? ''));
                 if (resolved !== before) {
                   resolved_count++;
-                  // eslint-disable-next-line no-console
-                  console.log(`[WebPilot] Resolved [[extracted.${varName}]] → "${String(val).substring(0, 40)}"`);
+                }
                 }
               }
             }
@@ -515,12 +530,9 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
 
         if (resolved !== currentStep.value) {
           currentStep = { ...currentStep, value: resolved };
-          // eslint-disable-next-line no-console
-          console.log(`[WebPilot] Step ${i}: resolved ${resolved_count} extracted variables`);
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[WebPilot] Error resolving step value placeholders:', err);
+        console.error('[WebPilot] Error resolving step value placeholders:', err.message);
       }
     }
 
@@ -530,13 +542,13 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
       currentIndex: i,
       total: steps.length,
       step: currentStep,
-    }).catch(() => {});
+    }).catch((err) => {
+      // Popup may be closed, silently ignore
+    });
 
     // Handle navigate actions directly in background (don't send to content script)
     // This avoids "Receiving end does not exist" error when the page unloads
     if (currentStep.action === 'navigate') {
-      // eslint-disable-next-line no-console
-      console.log(`[WebPilot] Executing step ${i + 1}/${steps.length}: navigate to ${currentStep.value}`);
 
       // Update the tab URL directly
       await chrome.tabs.update(tabId, { url: currentStep.value });
@@ -555,13 +567,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
       const RETRY_DELAY_MS = 1000;
       let result;
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        if (attempt === 1) {
-          // eslint-disable-next-line no-console
-          console.log(`[WebPilot] Executing step ${i + 1}/${steps.length}: ${currentStep.action}${currentStep.selector ? ` (${currentStep.selector})` : ''}${currentStep.variable ? ` -> [[extracted.${currentStep.variable}]]` : ''}`);
-        } else {
-          // eslint-disable-next-line no-console
-          console.log(`[WebPilot] Retrying step ${i + 1} (attempt ${attempt}/${MAX_RETRIES})`);
-        }
+        // Execution logging removed - comment out if needed for debugging
 
         result = await chrome.tabs.sendMessage(tabId, {
           type: 'EXECUTE_STEP',
@@ -582,7 +588,9 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
             step: currentStep,
             retryAttempt: attempt,
             retryMax: MAX_RETRIES,
-          }).catch(() => {});
+          }).catch((err) => {
+            // Popup may be closed, silently ignore
+          });
           await delay(RETRY_DELAY_MS);
         }
       }
@@ -600,11 +608,6 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
           const valStr = String(val).trim();
           if (valStr.length > 0) {
             storageItems[`extracted_${varName}`] = val;
-            // eslint-disable-next-line no-console
-            console.log(`[WebPilot] Storing extracted variable: ${varName} = ${valStr.substring(0, 50)}`);
-          } else {
-            // eslint-disable-next-line no-console
-            console.warn(`[WebPilot] Skipping empty extracted value for: ${varName}`);
           }
         }
 
