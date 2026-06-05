@@ -7,15 +7,15 @@
 // Open the side panel instead of a popup when the toolbar icon is clicked
 // ---------------------------------------------------------------------------
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((err) => {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((_err) => {
     // API unavailable in older Chrome versions — gracefully ignore.
-    console.warn('[WebPilot] sidePanel.setPanelBehavior not available:', err.message);
+    console.warn('[WebPilot] sidePanel.setPanelBehavior not available:', _err.message);
   });
 
   // Context menu items — shown on every page element.
   // Two entries: one to extract text/value into a new {{variable}},
   // one to fill the element with an existing variable.
-  chrome.contextMenus.removeAll((err) => {
+  chrome.contextMenus.removeAll((_err) => {
     if (chrome.runtime.lastError) {
       console.warn('[WebPilot] Failed to remove context menus:', chrome.runtime.lastError.message);
       return;
@@ -24,7 +24,7 @@ chrome.runtime.onInstalled.addListener(() => {
       id:       'webpilot-extract',
       title:    'WebPilot: Extract as variable…',
       contexts: ['all'],
-    }, (err) => {
+    }, (_err) => {
       if (chrome.runtime.lastError) {
         console.error('[WebPilot] Failed to create extract menu:', chrome.runtime.lastError.message);
       }
@@ -33,7 +33,7 @@ chrome.runtime.onInstalled.addListener(() => {
       id:       'webpilot-fill',
       title:    'WebPilot: Fill with variable…',
       contexts: ['all'],
-    }, (err) => {
+    }, (_err) => {
       if (chrome.runtime.lastError) {
         console.error('[WebPilot] Failed to create fill menu:', chrome.runtime.lastError.message);
       }
@@ -508,7 +508,6 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
       try {
         const sessionItems = await chrome.storage.session.get(null);
         let resolved = currentStep.value;
-        let resolved_count = 0;
 
         // Resolve [[extracted.varName]] from session storage (values stored by previous extract steps)
         if (/\[\[extracted\.\w+\]\]/.test(resolved)) {
@@ -519,9 +518,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
               if (resolved.includes(pattern)) {
                 const before = resolved;
                 resolved = resolved.replaceAll(pattern, String(val ?? ''));
-                if (resolved !== before) {
-                  resolved_count++;
-                }
+                // Pattern replacement occurred
               }
             }
           }
@@ -541,7 +538,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
       currentIndex: i,
       total: steps.length,
       step: currentStep,
-    }).catch((err) => {
+    }).catch((_err) => {
       // Popup may be closed, silently ignore
     });
 
