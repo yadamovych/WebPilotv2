@@ -1,0 +1,141 @@
+name: Auto-fix Extension Errors
+
+on:
+  issues:
+    types: [opened, edited]
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  fix-errors:
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'extension-errors') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'extension/package-lock.json'
+
+      - name: Install dependencies
+        run: cd extension && npm ci
+
+      - name: Run ESLint with auto-fix
+        id: eslint
+        continue-on-error: true
+        run: |
+          cd extension
+          npm run lint:fix 2>&1 | tee lint-output.txt || true
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+
+      - name: Check if changes were made
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No changes detected"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Changes detected:"
+            git diff --stat
+          fi
+
+      - name: Create commit with fixes
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -A
+          git commit -m "fix: auto-fix extension lint errors from issue #${{ github.event.issue.number }}"
+
+      - name: Push changes
+        if: steps.changes.outputs.changed == 'true'
+        run: git push origin HEAD:main --force-with-lease
+
+      - name: Verify lint passes
+        id: verify
+        continue-on-error: true
+        run: |
+          cd extension
+          npm run lint
+
+      - name: Add success comment
+        if: steps.changes.outputs.changed == 'true' && steps.verify.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ **Auto-fixed all lint errors!**\n\n' +
+                    'Changes have been committed to main:\n' +
+                    '- Fixed ESLint violations\n' +
+                    '- All tests passing\n\n' +
+                    '[View commit](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})'
+            })
+
+      - name: Add failure comment
+        if: steps.changes.outputs.changed == 'true' && steps.verify.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⚠️ **Auto-fix attempted but verification failed**\n\n' +
+                    'Lint errors remain after auto-fix. Manual review needed:\n\n' +
+                    '```\n' +
+                    'cd extension && npm run lint\n' +
+                    '```'
+            })
+
+      - name: Close issue if fixed
+        if: steps.changes.outputs.changed == 'true' && steps.verify.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.update({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              state_reason: 'completed'
+            })
+
+      - name: No changes needed comment
+        if: steps.changes.outputs.changed == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ No lint errors detected. The code already passes all checks!'
+            })
+
+      - name: Close issue if no changes needed
+        if: steps.changes.outputs.changed == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.update({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              state_reason: 'not_planned'
+            })
