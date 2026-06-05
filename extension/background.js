@@ -211,6 +211,7 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
         auto: true, // Mark as auto-generated
       });
 
+      // eslint-disable-next-line no-console
       console.log(`[WebPilot] Auto-recorded navigate step to: ${url}`);
 
       // Notify popup that steps have changed
@@ -504,6 +505,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
                 resolved = resolved.replaceAll(pattern, String(val ?? ''));
                 if (resolved !== before) {
                   resolved_count++;
+                  // eslint-disable-next-line no-console
                   console.log(`[WebPilot] Resolved [[extracted.${varName}]] → "${String(val).substring(0, 40)}"`);
                 }
               }
@@ -513,9 +515,11 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
 
         if (resolved !== currentStep.value) {
           currentStep = { ...currentStep, value: resolved };
+          // eslint-disable-next-line no-console
           console.log(`[WebPilot] Step ${i}: resolved ${resolved_count} extracted variables`);
         }
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.warn('[WebPilot] Error resolving step value placeholders:', err);
       }
     }
@@ -531,6 +535,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
     // Handle navigate actions directly in background (don't send to content script)
     // This avoids "Receiving end does not exist" error when the page unloads
     if (currentStep.action === 'navigate') {
+      // eslint-disable-next-line no-console
       console.log(`[WebPilot] Executing step ${i + 1}/${steps.length}: navigate to ${currentStep.value}`);
 
       // Update the tab URL directly
@@ -551,8 +556,10 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
       let result;
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         if (attempt === 1) {
+          // eslint-disable-next-line no-console
           console.log(`[WebPilot] Executing step ${i + 1}/${steps.length}: ${currentStep.action}${currentStep.selector ? ` (${currentStep.selector})` : ''}${currentStep.variable ? ` -> [[extracted.${currentStep.variable}]]` : ''}`);
         } else {
+          // eslint-disable-next-line no-console
           console.log(`[WebPilot] Retrying step ${i + 1} (attempt ${attempt}/${MAX_RETRIES})`);
         }
 
@@ -593,8 +600,10 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
           const valStr = String(val).trim();
           if (valStr.length > 0) {
             storageItems[`extracted_${varName}`] = val;
+            // eslint-disable-next-line no-console
             console.log(`[WebPilot] Storing extracted variable: ${varName} = ${valStr.substring(0, 50)}`);
           } else {
+            // eslint-disable-next-line no-console
             console.warn(`[WebPilot] Skipping empty extracted value for: ${varName}`);
           }
         }

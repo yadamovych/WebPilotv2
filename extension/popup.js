@@ -700,7 +700,7 @@ function buildEditorStep(step, index, draft, refresh) {
     } catch (_) {}
   });
   li.addEventListener('mouseleave', () => {
-    if (_hlTab == null) {
+    if (_hlTab === null) {
       return;
     }
     try {

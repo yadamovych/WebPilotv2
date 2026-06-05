@@ -133,10 +133,6 @@
     return extractedValues.get(varName);
   }
 
-  function getAllExtractedVariables() {
-    return Array.from(extractedValues.entries());
-  }
-
   function getAvailableVariablesForFilling(callback) {
     // Get extracted values first
     const extracted = Array.from(extractedValues.entries());
@@ -185,16 +181,19 @@
         // Get value from input/textarea
         if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
           const val = String(el.value || '');
+          // eslint-disable-next-line no-console
           console.log(`[WebPilot] Extract by value from ${selector}: matched ${matchCount} element(s), got: "${val.substring(0, 50)}${val.length > 50 ? '...' : ''}"`);
           return val;
         }
         // Try data attributes
         if (el.hasAttribute('data-value')) {
           const val = String(el.getAttribute('data-value') || '');
+          // eslint-disable-next-line no-console
           console.log(`[WebPilot] Extract data-value from ${selector}: matched ${matchCount} element(s), got: "${val.substring(0, 50)}${val.length > 50 ? '...' : ''}"`);
           return val;
         }
         const val = String(el.textContent?.trim() || '');
+        // eslint-disable-next-line no-console
         console.log(`[WebPilot] Extract textContent from ${selector}: matched ${matchCount} element(s), got: "${val.substring(0, 50)}${val.length > 50 ? '...' : ''}"`);
         return val;
       }
@@ -208,34 +207,19 @@
       } else {
         val = String(el.textContent?.trim() || '');
       }
+      // eslint-disable-next-line no-console
       console.log(`[WebPilot] Extract text from ${selector}: matched ${matchCount} element(s), got: "${val.substring(0, 50)}${val.length > 50 ? '...' : ''}"`);
       return val;
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.warn(`[WebPilot] Error extracting from ${selector}:`, err);
       return '';
     }
   }
 
-  // ---------------------------------------------------------------------------
   // Utility: strip Markdown syntax so rich-text editors (Jira, Confluence, etc.)
   // receive plain text instead of literal **bold** / ## heading characters.
-  // ---------------------------------------------------------------------------
-  function stripMarkdown(text) {
-    return text
-      .replace(/^#{1,6}\s+/gm, '')            // ## headings
-      .replace(/(\*\*|__)(.*?)\1/g, '$2')      // **bold** / __bold__
-      .replace(/(\*|_)(.*?)\1/g, '$2')         // *italic* / _italic_
-      .replace(/~~(.*?)~~/g, '$1')             // ~~strikethrough~~
-      .replace(/`{1,3}[^`]*`{1,3}/g, (m) =>   // `code` / ```block```
-        m.replace(/`/g, '').trim())
-      .replace(/^\s*[-*+]\s+/gm, '')           // - / * / + unordered list bullets
-      .replace(/^\s*\d+\.\s+/gm, '')           // 1. ordered list
-      .replace(/^\s*>\s*/gm, '')               // > blockquote
-      .replace(/^-{3,}$/gm, '')               // --- horizontal rules
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [link text](url) → link text
-      .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1') // ![alt](url) → alt
-      .trim();
-  }
+  // NOTE: Markdown stripping currently unused but kept for future rich-text handling
 
   // ---------------------------------------------------------------------------
   // Message listener (from background)
@@ -1208,7 +1192,7 @@
         if (/date|calendar|picker/.test(hint)) {
           return inp;
         }
-        if (inp.value && /^\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(inp.value)) {
+        if (inp.value && /^\d{4}-\d{2}-\d{2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}/.test(inp.value)) {
           return inp;
         }
       }
@@ -1725,6 +1709,7 @@
       storeExtractedValue(varName, extractedValue);
       const preview = extractedValue.substring(0, 50) + (extractedValue.length > 50 ? '...' : '');
       const statusMsg = `Extract step ${index + 1}/${total}: [[extracted.${varName}]]${extractedValue ? ` = "${preview}"` : ' (empty)'}`;
+      // eslint-disable-next-line no-console
       console.log(`[WebPilot] ${statusMsg}`);
       showProgress(index, total, statusMsg);
       return { success: true, extracted: { [varName]: extractedValue } };
@@ -1794,24 +1779,29 @@
       // Fallback: if any [[extracted.varName]] patterns remain, resolve them here
       const extractedMatches = finalValue.match(/\[\[extracted\.([a-zA-Z_][a-zA-Z0-9_]*)\]\]/g) || [];
       if (extractedMatches.length > 0) {
+        // eslint-disable-next-line no-console
         console.log(`[WebPilot] Content script: resolving ${extractedMatches.length} extracted variables`);
         extractedMatches.forEach((match) => {
           try {
-            const varName = match.replace(/[\[\]extracted.]/g, '');
+            const varName = match.replace(/[\]\\[extracted.]/g, '');
             const extracted = getExtractedValue(varName);
             if (extracted !== undefined && extracted !== null) {
               const extractedStr = String(extracted);
+              // eslint-disable-next-line no-console
               console.log(`[WebPilot] Resolved [[extracted.${varName}]] → ${extractedStr.substring(0, 30)}`);
               finalValue = finalValue.replace(match, extractedStr);
             } else {
+              // eslint-disable-next-line no-console
               console.warn(`[WebPilot] Extracted variable not found or undefined: [[extracted.${varName}]]`);
             }
           } catch (err) {
+            // eslint-disable-next-line no-console
             console.error(`[WebPilot] Error resolving extracted variable ${match}:`, err);
           }
         });
       }
 
+      // eslint-disable-next-line no-console
       console.log(`[WebPilot] Type action: finalValue type=${typeof finalValue}, length=${String(finalValue).length}`);
 
 
