@@ -522,7 +522,6 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
                 if (resolved !== before) {
                   resolved_count++;
                 }
-                }
               }
             }
           }
