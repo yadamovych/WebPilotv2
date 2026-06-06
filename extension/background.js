@@ -3,6 +3,9 @@
 
 'use strict';
 
+// Import centralized error tracking and safe utilities
+importScripts('error-handler.js');
+
 // ---------------------------------------------------------------------------
 // Open the side panel instead of a popup when the toolbar icon is clicked
 // ---------------------------------------------------------------------------
@@ -97,14 +100,14 @@ const DEFAULT_SERVER_URL = 'http://localhost:8000';
 })();
 
 function persistState() {
-  chrome.storage.session.set({
+  safeStor.set({
     recordingState: {
       recording:      STATE.recording,
       recordingTabId: STATE.recordingTabId,
       steps:          STATE.steps,
     },
   }).catch((err) => {
-    console.warn('[WebPilot] Failed to persist recording state:', err?.message || err);
+    errorTracker.track(err, { context: 'persistState' });
   });
 }
 
@@ -126,7 +129,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     STATE.steps = [];
     persistState();
     chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: [] }).catch((err) => {
-      console.warn('[WebPilot] Failed to notify steps cleared:', err?.message || err);
+      errorTracker.track(err, { context: 'notifyStepsCleared' });
     });
     sendResponse({ success: true });
     break;
