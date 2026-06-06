@@ -103,9 +103,14 @@ const DEFAULT_SERVER_URL = 'http://localhost:8000';
   try {
     const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
     const backendUrl = serverConfig.url || DEFAULT_SERVER_URL;
+    // eslint-disable-next-line no-undef, no-console
+    console.log('[WebPilot] Starting error reporter to:', backendUrl);
     // eslint-disable-next-line no-undef
-    startErrorReporting(backendUrl, 5); // Report every 5 minutes
-  } catch (_) { /* error reporting setup failed — silently continue */ }
+    startErrorReporting(backendUrl, 1); // Report every 1 minute for testing
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[WebPilot] Error reporting setup failed:', err?.message || err);
+  }
 })();
 
 function persistState() {
@@ -179,6 +184,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.local.set({ serverConfig: message.config })
       .then(() => sendResponse({ success: true }))
       .catch(err => sendResponse({ error: err.message }));
+    break;
+  case 'REPORT_ERRORS':
+    // Manual error reporting for debugging
+    (async () => {
+      try {
+        const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
+        const backendUrl = serverConfig.url || DEFAULT_SERVER_URL;
+        // eslint-disable-next-line no-undef
+        const result = await reportErrorsToBackend(backendUrl);
+        sendResponse(result);
+      } catch (err) {
+        sendResponse({ success: false, error: err?.message || err });
+      }
+    })();
+    break;
+  case 'GET_ERRORS':
+    // Get all tracked errors for debugging
+    // eslint-disable-next-line no-undef
+    errorTracker.getErrors().then((errors) => {
+      sendResponse({ success: true, errors, count: errors.length });
+    }).catch(err => sendResponse({ success: false, error: err?.message || err }));
     break;
   default:
     sendResponse({ error: `Unknown message type: ${message.type}` });

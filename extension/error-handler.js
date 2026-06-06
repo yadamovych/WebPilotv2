@@ -203,22 +203,37 @@ async function reportErrorsToBackend(backendUrl) {
 
     // Don't report if no errors
     if (report.errorCount === 0) {
+      // eslint-disable-next-line no-console
+      console.log('[WebPilot] No errors to report');
       return { success: true, message: 'No errors to report' };
     }
+
+    // eslint-disable-next-line no-console
+    console.log(`[WebPilot] Reporting ${report.errorCount} errors to ${backendUrl}/api/extension-errors`);
 
     const response = await fetch(`${backendUrl}/api/extension-errors`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(report),
     });
+
+    // eslint-disable-next-line no-console
+    console.log(`[WebPilot] Server responded with status ${response.status}`);
+
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      throw new Error(`HTTP ${response.status}: ${text}`);
     }
+
     await errorTracker.clearErrors();
+    // eslint-disable-next-line no-console
+    console.log(`[WebPilot] Successfully reported ${report.errorCount} errors`);
     return { success: true, message: `Reported ${report.errorCount} errors` };
   } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('[WebPilot] Error reporting failed:', error?.message || error);
     errorTracker.track(error, { operation: 'report-to-backend' });
-    return { success: false, error: error.message };
+    return { success: false, error: error?.message || String(error) };
   }
 }
 
@@ -226,16 +241,21 @@ async function reportErrorsToBackend(backendUrl) {
  * Start periodic error reporting (call from background.js)
  */
 function startErrorReporting(backendUrl, intervalMinutes = 5) {
+  // eslint-disable-next-line no-console
+  console.log(`[WebPilot] Error reporting started (interval: ${intervalMinutes} min, backend: ${backendUrl})`);
+
   // Report immediately if there are errors
-  reportErrorsToBackend(backendUrl);
+  reportErrorsToBackend(backendUrl).then((result) => {
+    if (!result.success) {
+      // eslint-disable-next-line no-console
+      console.warn('[WebPilot] Initial error report failed:', result.error);
+    }
+  });
 
   // Then schedule periodic reporting
   setInterval(async () => {
     const result = await reportErrorsToBackend(backendUrl);
-    if (result.success) {
-      // eslint-disable-next-line no-console
-      console.log('[WebPilot] Error report sent:', result.message);
-    } else {
+    if (!result.success) {
       // eslint-disable-next-line no-console
       console.warn('[WebPilot] Error report failed:', result.error);
     }
