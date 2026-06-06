@@ -62,7 +62,9 @@
       return;
     }
     try {
-      chrome.storage.session.set(items).catch(() => {});
+      // Use chrome.storage.local for extracted values so they persist across page navigation
+      // (chrome.storage.session gets cleared on navigation)
+      chrome.storage.local.set(items).catch(() => {});
     } catch (_) {}
   }
 
@@ -71,7 +73,8 @@
       cb({}); return;
     }
     try {
-      chrome.storage.session.get(keys, cb);
+      // Use chrome.storage.local to retrieve extracted values across page navigation
+      chrome.storage.local.get(keys, cb);
     } catch (_) {
       cb({});
     }
@@ -112,6 +115,21 @@
 
   // Map<variableName, value> — extracted values from elements during playback
   const extractedValues = new Map();
+
+  // Promise that resolves when extracted values are loaded from storage
+  let extractedValuesInitialized = false;
+  const extractedValuesReady = new Promise((resolve) => {
+    // This will be called when storage loading completes
+    window.__webpilotResolveExtractedValues = resolve;
+  });
+
+  // Wait for extracted values to be loaded before using them
+  async function waitForExtractedValues() {
+    if (extractedValuesInitialized) {
+      return;
+    }
+    await extractedValuesReady;
+  }
 
   // The element that was most recently right-clicked (tracked globally so the
   // native context-menu → SHOW_EXTRACT_MODAL path can find it).
@@ -156,10 +174,51 @@
 
   // Load extracted values from storage on initialization
   safeStorageGet(null, (items) => {
+    let loadedCount = 0;
     Object.entries(items || {}).forEach(([key, value]) => {
       if (key.startsWith('extracted_')) {
         const varName = key.replace('extracted_', '');
         extractedValues.set(varName, value);
+        loadedCount++;
+        // eslint-disable-next-line no-console
+        console.log(
+          `[WebPilot] Loaded extracted value from storage: ${varName} = ${String(value).substring(0, 50)}`,
+        );
+      }
+    });
+    // eslint-disable-next-line no-console
+    console.log(`[WebPilot] Loaded ${loadedCount} extracted values from chrome.storage.local`);
+    // Mark initialization as complete and resolve the promise
+    extractedValuesInitialized = true;
+    if (window.__webpilotResolveExtractedValues) {
+      window.__webpilotResolveExtractedValues();
+    }
+  });
+
+  // Listen for storage changes from other tabs/frames (real-time sync for parallel execution)
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') {
+      return;
+    }
+
+    // Update extractedValues when any tab/frame changes them
+    Object.entries(changes).forEach(([key, change]) => {
+      if (key.startsWith('extracted_')) {
+        const varName = key.replace('extracted_', '');
+        const newValue = change.newValue;
+
+        if (newValue !== undefined) {
+          extractedValues.set(varName, newValue);
+          // eslint-disable-next-line no-console
+          console.log(
+            `[WebPilot] Synced extracted value from another tab: ${varName} = ${String(newValue).substring(0, 50)}`,
+          );
+        } else {
+          // Value was cleared/deleted
+          extractedValues.delete(varName);
+          // eslint-disable-next-line no-console
+          console.log(`[WebPilot] Cleared extracted value from another tab: ${varName}`);
+        }
       }
     });
   });
@@ -173,8 +232,7 @@
     const matchCount = document.querySelectorAll(selector).length;
     if (!el) {
       const msg = `Selector "${selector}" matched 0 elements`;
-      console.warn(`[WebPilot] ${msg}`);
-      // Track this warning for error reporting
+      // Track this warning for error reporting (silent - no console output)
       if (typeof errorTracker !== 'undefined') {
         errorTracker.track(
           new Error(msg),
@@ -219,9 +277,7 @@
       console.log(`[WebPilot] Extract text from ${selector}: matched ${matchCount} element(s), got: "${val.substring(0, 50)}${val.length > 50 ? '...' : ''}"`);
       return val;
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn(`[WebPilot] Error extracting from ${selector}:`, err);
-      // Track extraction errors
+      // Track extraction errors (silent - no console output)
       if (typeof errorTracker !== 'undefined') {
         errorTracker.track(err, { context: 'extractFromElement', selector });
       }
@@ -234,21 +290,26 @@
    * If the original selector fails, requests AI-powered alternatives from backend
    */
   async function extractFromElementWithRetry(selector, extractType = 'text') {
-    // First try with original selector
-    const originalResult = extractFromElement(selector, extractType);
-
-    // If successful, return
-    const matchCount = document.querySelectorAll(selector).length;
-    if (matchCount > 0 && originalResult) {
+    // First wait for element to exist (page may still be loading)
+    const waitTimeout = 6000; // 6 second timeout for element to appear
+    try {
+      const el = await waitForElement(selector, waitTimeout);
+      if (el) {
+        // Element exists, now extract from it
+        const result = extractFromElement(selector, extractType);
+        if (result) {
+          // eslint-disable-next-line no-console
+          console.log('[WebPilot] Extraction succeeded with original selector');
+          return result;
+        }
+      }
+    } catch (err) {
+      // waitForElement timeout or error — element still not found
       // eslint-disable-next-line no-console
-      console.log('[WebPilot] Extraction succeeded with original selector');
-      return originalResult;
+      console.log('[WebPilot] Element not found or still loading, requesting alternatives...');
     }
 
-    // Original selector failed — try to get alternatives from background worker
-    // eslint-disable-next-line no-console
-    console.log('[WebPilot] Original selector failed, requesting alternatives...');
-
+    // Element not available or extraction failed — try to get alternatives from backend
     try {
       // Send message to background worker to get alternatives
       const response = await new Promise((resolve) => {
@@ -257,7 +318,7 @@
             type: 'GET_SELECTOR_ALTERNATIVES',
             selector,
             extractType,
-            description: 'Element not found',
+            description: 'Element not found or not ready',
             pageUrl: window.location.href,
           },
           (response) => {
@@ -275,42 +336,49 @@
       if (!alternatives.success || !alternatives.alternatives.length) {
         // eslint-disable-next-line no-console
         console.warn('[WebPilot] No alternatives available');
-        return originalResult;
+        return '';
       }
 
       // Try each alternative selector in order of flexibility
       for (const alt of alternatives.alternatives) {
-        const altResult = extractFromElement(alt.selector, extractType);
-        const altMatchCount = document.querySelectorAll(alt.selector).length;
+        try {
+          // Wait for alternative selector too
+          const altEl = await waitForElement(alt.selector, 3000);
+          if (altEl) {
+            const altResult = extractFromElement(alt.selector, extractType);
+            if (altResult) {
+              // eslint-disable-next-line no-console
+              console.log(
+                `[WebPilot] ✅ Selector recovery succeeded!\nOriginal: ${selector}\nRecovered with: ${alt.selector}\nFlexibility: ${alt.flexibility}`,
+              );
 
-        if (altMatchCount > 0 && altResult) {
-          // eslint-disable-next-line no-console
-          console.log(
-            `[WebPilot] ✅ Selector recovery succeeded!\nOriginal: ${selector}\nRecovered with: ${alt.selector}\nFlexibility: ${alt.flexibility}`,
-          );
+              // Track successful recovery
+              if (typeof errorTracker !== 'undefined') {
+                errorTracker.track(
+                  new Error('Selector Recovery Success'),
+                  {
+                    context: 'extractFromElementWithRetry',
+                    original: selector,
+                    recovered: alt.selector,
+                    flexibility: alt.flexibility,
+                    extractType,
+                  },
+                );
+              }
 
-          // Track successful recovery
-          if (typeof errorTracker !== 'undefined') {
-            errorTracker.track(
-              new Error('Selector Recovery Success'),
-              {
-                context: 'extractFromElementWithRetry',
-                original: selector,
-                recovered: alt.selector,
-                flexibility: alt.flexibility,
-                extractType,
-              },
-            );
+              return altResult;
+            }
           }
-
-          return altResult;
+        } catch (altErr) {
+          // This alternative selector also not found, try next one
+          continue;
         }
       }
 
       // None of the alternatives worked
       // eslint-disable-next-line no-console
       console.warn('[WebPilot] No alternative selectors matched');
-      return originalResult;
+      return '';
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[WebPilot] Error during selector recovery:', err);
@@ -321,7 +389,7 @@
           stage: 'recovery-attempt',
         });
       }
-      return originalResult;
+      return '';
     }
   }
 
@@ -930,6 +998,49 @@
         isContentEditable: el.isContentEditable || undefined,
       },
     });
+
+    // If the value contains extracted variable references, resolve and apply them
+    // to the element for real-time preview during recording
+    if (value && value.includes('[[extracted.')) {
+      resolveAndApplyExtractedVariables(el, value);
+    }
+  }
+
+  /**
+   * Resolve extracted variables and apply the resolved value to an element
+   * Provides real-time visual feedback during recording
+   */
+  async function resolveAndApplyExtractedVariables(el, valueTemplate) {
+    try {
+      let resolvedValue = valueTemplate;
+      const extractedMatches = valueTemplate.match(/\[\[extracted\.([a-zA-Z_][a-zA-Z0-9_]*)\]\]/g) || [];
+
+      // Resolve each extracted variable
+      for (const match of extractedMatches) {
+        const varName = match.replace(/^\[\[extracted\.|\]\]$/g, '');
+        const extractedValue = getExtractedValue(varName);
+
+        if (extractedValue !== undefined && extractedValue !== null) {
+          resolvedValue = resolvedValue.replace(match, String(extractedValue));
+        }
+      }
+
+      // Apply the resolved value to the element
+      if (el.isContentEditable) {
+        el.textContent = resolvedValue;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        el.value = resolvedValue;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      // eslint-disable-next-line no-console
+      console.log(`[WebPilot] Resolved and applied extracted variables: ${resolvedValue.substring(0, 50)}`);
+    } catch (err) {
+      // Silent fail — recording still works with template string
+      // eslint-disable-next-line no-console
+      console.log('[WebPilot] Could not resolve extracted variables during recording:', err.message);
+    }
   }
 
   /**
@@ -1868,6 +1979,9 @@
     }
 
     case 'type': {
+      // Wait for extracted values to be loaded from storage (important for parallel tab execution)
+      await waitForExtractedValues();
+
       // If the selector resolved to a container (not directly editable),
       // look for the actual editable descendant inside it.
       // This handles wrappers like div.jira-wikifield that contain a
@@ -1894,7 +2008,8 @@
         console.log(`[WebPilot] Content script: resolving ${extractedMatches.length} extracted variables`);
         extractedMatches.forEach((match) => {
           try {
-            const varName = match.replace(/[\]\\[extracted.]/g, '');
+            // Extract variable name: [[extracted.varName]] → varName
+            const varName = match.replace(/^\[\[extracted\.|\]\]$/g, '');
             const extracted = getExtractedValue(varName);
             if (extracted !== undefined && extracted !== null) {
               const extractedStr = String(extracted);
@@ -1973,24 +2088,14 @@
             } catch (_) {}
           }
 
-          // Use native setter for maximum compatibility
-          const nativeSetter =
-              Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
-              Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-
-          if (nativeSetter && (typeEl instanceof HTMLInputElement || typeEl instanceof HTMLTextAreaElement)) {
-            try {
-              nativeSetter.call(typeEl, String(finalValue ?? ''));
-            } catch (err) {
-              console.warn('[WebPilot] Native setter failed, using direct assignment:', err);
-              // Track native setter failures
-              if (typeof errorTracker !== 'undefined') {
-                errorTracker.track(err, { context: 'typeElement', method: 'nativeSetter' });
-              }
-              typeEl.value = String(finalValue ?? '');
-            }
-          } else {
+          // Simple direct assignment is most reliable
+          try {
             typeEl.value = String(finalValue ?? '');
+          } catch (err) {
+            // Track assignment failures
+            if (typeof errorTracker !== 'undefined') {
+              errorTracker.track(err, { context: 'typeElement', method: 'setValue' });
+            }
           }
 
           if (savedType) {

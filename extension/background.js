@@ -351,9 +351,14 @@ async function handleStartRecording(tabId, { noAutoNavigate = false } = {}) {
     await ensureContentScript(tabId);
 
     const wasRecording = STATE.recording;
+
+    // If recording was stopped (not just paused), clear old steps for a fresh workflow
+    if (!wasRecording && STATE.steps.length > 0) {
+      STATE.steps = [];
+    }
+
     STATE.recording = true;
     STATE.recordingTabId = tabId;
-    // Do NOT clear steps here — user may be adding more steps to an existing session
 
     // Only add navigate step if this is the very first start of a new session
     // (not after clear, not after stop/start, not after resume)
