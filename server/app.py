@@ -53,10 +53,7 @@ class FillTemplateRequest(BaseModel):
     )
     variables: list[str] = Field(
         ...,
-        description=(
-            "List of TEMPLATE VARIABLES {{varName}} to generate "
-            "(not extracted variables)"
-        ),
+        description=("List of TEMPLATE VARIABLES {{varName}} to generate " "(not extracted variables)"),
     )
     templateName: str = Field(
         ...,
@@ -304,9 +301,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 try:
                     req = FillTemplateRequest(**data.get("payload", {}))
                     result = await fill_template(req)
-                    await websocket.send_json(
-                        {"type": "fill_template_result", "data": result.model_dump()}
-                    )
+                    await websocket.send_json({"type": "fill_template_result", "data": result.model_dump()})
                 except Exception as exc:
                     await websocket.send_json({"type": "error", "message": str(exc)})
 
@@ -314,16 +309,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 try:
                     req = PromptRequest(**data.get("payload", {}))
                     result = await prompt_endpoint(req)
-                    await websocket.send_json(
-                        {"type": "prompt_result", "data": result.model_dump()}
-                    )
+                    await websocket.send_json({"type": "prompt_result", "data": result.model_dump()})
                 except Exception as exc:
                     await websocket.send_json({"type": "error", "message": str(exc)})
 
             else:
-                await websocket.send_json(
-                    {"type": "error", "message": f"Unknown type: {msg_type}"}
-                )
+                await websocket.send_json({"type": "error", "message": f"Unknown type: {msg_type}"})
 
     except WebSocketDisconnect:
         pass
