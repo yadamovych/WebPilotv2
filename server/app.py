@@ -122,6 +122,29 @@ class ExtensionErrorReport(BaseModel):
     errors: list[ExtensionErrorRecord]
 
 
+class SelectorAnalysisRequest(BaseModel):
+    failingSelector: str = Field(..., description="CSS selector that failed to match any elements")
+    elementDescription: Optional[str] = Field(None, description="Human-readable description of what element to target")
+    pageUrl: Optional[str] = Field(None, description="URL where the selector failed")
+    extractionType: Optional[str] = Field(None, description="Type of extraction: text, attribute, html, etc.")
+
+
+class SelectorAlternative(BaseModel):
+    selector: str = Field(..., description="Alternative CSS selector")
+    flexibility: str = Field(
+        ...,
+        description="Flexibility level: rigid, moderate, flexible",
+    )
+    explanation: str = Field(..., description="Why this selector is more robust")
+
+
+class SelectorAnalysisResponse(BaseModel):
+    original: str
+    alternatives: list[SelectorAlternative]
+    recommended: str = Field(..., description="Most flexible/robust alternative")
+    confidence: float = Field(..., ge=0, le=1, description="Confidence in the recommendation")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -271,6 +294,96 @@ async def report_extension_errors(report: ExtensionErrorReport) -> dict:
             logger.debug("[Extension Error Stack]\n%s", error.stack)
 
     return {"success": True, "message": f"Received {report.errorCount} errors"}
+
+
+@app.post("/api/analyze-selector", tags=["extension"])
+async def analyze_selector_error(request: SelectorAnalysisRequest) -> SelectorAnalysisResponse:
+    """
+    Analyze failing CSS selectors and generate more robust alternatives using Groq.
+    Uses fast Llama/Mixtral models for real-time suggestions.
+    """
+    try:
+        # Build analysis prompt
+        prompt = f"""Analyze this failing CSS selector and suggest 3 more robust alternatives.
+
+Original selector: {request.failingSelector}
+Element target: {request.elementDescription or "Unknown"}
+Extraction type: {request.extractionType or "text"}
+Page: {request.pageUrl or "Unknown"}
+
+For each alternative, provide:
+1. The CSS selector
+2. Flexibility level (rigid/moderate/flexible)
+3. Why it's more robust
+
+Focus on:
+- Using nth-child instead of nth-of-type when possible
+- Using class names or data attributes if available
+- Fallback to parent element + descendant selectors
+- Using more general selectors that survive DOM changes
+
+Return ONLY valid JSON with this structure:
+{{
+  "alternatives": [
+    {{"selector": "...", "flexibility": "...", "explanation": "..."}},
+    ...
+  ],
+  "recommended_index": 0
+}}"""
+
+        # Use Groq backend for fast inference
+        backend = get_backend(
+            "groq",
+            api_key=settings.groq_api_key,
+            model=settings.groq_model,
+        )
+
+        result = await backend.complete(
+            system_prompt="You are an expert CSS selector specialist. Return only valid JSON.",
+            user_prompt=prompt,
+        )
+
+        # Parse response
+        try:
+            response_data = json.loads(result.text)
+        except json.JSONDecodeError:
+            # Fallback: extract JSON from response
+            match = re.search(r"\{.*\}", result.text, re.DOTALL)
+            if not match:
+                raise ValueError(f"Failed to parse Groq response: {result.text}")
+            response_data = json.loads(match.group(0))
+
+        alternatives = [
+            SelectorAlternative(
+                selector=alt["selector"],
+                flexibility=alt.get("flexibility", "moderate"),
+                explanation=alt.get("explanation", "More robust selector"),
+            )
+            for alt in response_data.get("alternatives", [])
+        ]
+
+        recommended_idx = response_data.get("recommended_index", 0)
+        recommended = (
+            alternatives[recommended_idx].selector if recommended_idx < len(alternatives) else request.failingSelector
+        )
+
+        logger.info(
+            "[Selector Analysis] original=%s recommended=%s alternatives=%d",
+            request.failingSelector,
+            recommended,
+            len(alternatives),
+        )
+
+        return SelectorAnalysisResponse(
+            original=request.failingSelector,
+            alternatives=alternatives,
+            recommended=recommended,
+            confidence=0.85,
+        )
+
+    except Exception as exc:
+        logger.exception("selector analysis error")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------
