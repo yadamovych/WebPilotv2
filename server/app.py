@@ -53,7 +53,10 @@ class FillTemplateRequest(BaseModel):
     )
     variables: list[str] = Field(
         ...,
-        description=("List of TEMPLATE VARIABLES {{varName}} to generate " "(not extracted variables)"),
+        description=(
+            "List of TEMPLATE VARIABLES {{varName}} to generate "
+            "(not extracted variables)"
+        ),
     )
     templateName: str = Field(
         ...,
@@ -256,7 +259,7 @@ async def report_extension_errors(report: ExtensionErrorReport) -> dict:
         report.errorCount,
         [e.url for e in report.errors[:3]],  # Log first 3 URLs
     )
-    
+
     # Log each error with full context for debugging
     for error in report.errors:
         logger.error(
@@ -269,7 +272,7 @@ async def report_extension_errors(report: ExtensionErrorReport) -> dict:
         )
         if error.stack:
             logger.debug("[Extension Error Stack]\n%s", error.stack)
-    
+
     return {"success": True, "message": f"Received {report.errorCount} errors"}
 
 
@@ -301,7 +304,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 try:
                     req = FillTemplateRequest(**data.get("payload", {}))
                     result = await fill_template(req)
-                    await websocket.send_json({"type": "fill_template_result", "data": result.model_dump()})
+                    await websocket.send_json(
+                        {"type": "fill_template_result", "data": result.model_dump()}
+                    )
                 except Exception as exc:
                     await websocket.send_json({"type": "error", "message": str(exc)})
 
@@ -309,12 +314,16 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 try:
                     req = PromptRequest(**data.get("payload", {}))
                     result = await prompt_endpoint(req)
-                    await websocket.send_json({"type": "prompt_result", "data": result.model_dump()})
+                    await websocket.send_json(
+                        {"type": "prompt_result", "data": result.model_dump()}
+                    )
                 except Exception as exc:
                     await websocket.send_json({"type": "error", "message": str(exc)})
 
             else:
-                await websocket.send_json({"type": "error", "message": f"Unknown type: {msg_type}"})
+                await websocket.send_json(
+                    {"type": "error", "message": f"Unknown type: {msg_type}"}
+                )
 
     except WebSocketDisconnect:
         pass
@@ -330,7 +339,12 @@ def _extract_json(text: str) -> dict:
     text = text.strip()
 
     # 0. Strip reasoning/thinking tags that some models include (e.g., <think>...</think>, <analysis>...</analysis>)
-    text = re.sub(r"<(think|analysis|reasoning|reflection)>.*?</\1>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+    text = re.sub(
+        r"<(think|analysis|reasoning|reflection)>.*?</\1>",
+        "",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    ).strip()
 
     # 1. Direct parse
     try:
