@@ -239,50 +239,9 @@ async function reportErrorsToBackend(backendUrl) {
 
 /**
  * Get AI-powered alternative selectors for failed selector
+ * NOTE: This function is now handled by the background service worker
+ * to reduce content script permissions. See background.js GET_SELECTOR_ALTERNATIVES handler.
  */
-async function getAlternativeSelectors(backendUrl, failingSelector, context = {}) {
-  try {
-    // eslint-disable-next-line no-console
-    console.log(`[WebPilot] Requesting alternative selectors for: ${failingSelector}`);
-
-    const response = await fetch(`${backendUrl}/api/analyze-selector`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        failingSelector,
-        elementDescription: context.description || 'Unknown',
-        extractionType: context.extractType || 'text',
-        pageUrl: typeof window !== 'undefined' ? window.location?.href : 'N/A',
-      }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`HTTP ${response.status}: ${text}`);
-    }
-
-    const analysis = await response.json();
-
-    // eslint-disable-next-line no-console
-    console.log('[WebPilot] Got selector alternatives:', {
-      recommended: analysis.recommended,
-      count: analysis.alternatives.length,
-      confidence: analysis.confidence,
-    });
-
-    return {
-      success: true,
-      recommended: analysis.recommended,
-      alternatives: analysis.alternatives,
-      confidence: analysis.confidence,
-    };
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.warn('[WebPilot] Failed to get alternative selectors:', error?.message || error);
-    errorTracker.track(error, { operation: 'get-alternatives', selector: failingSelector });
-    return { success: false, alternatives: [] };
-  }
-}
 
 /**
  * Start periodic error reporting (call from background.js)
@@ -319,7 +278,6 @@ if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
     sendMessageSafe,
     safeStor,
     reportErrorsToBackend,
-    getAlternativeSelectors,
     startErrorReporting,
   };
 }

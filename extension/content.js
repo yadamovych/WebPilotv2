@@ -21,26 +21,6 @@
   }
   window.__webpilotLoaded = true;
 
-  // Global backend URL for selector recovery and error reporting
-  let backendUrl = 'http://localhost:8000';
-
-  // Initialize backend URL from storage
-  (async () => {
-    try {
-      if (chrome?.storage?.local) {
-        const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
-        if (serverConfig.url) {
-          backendUrl = serverConfig.url;
-          // eslint-disable-next-line no-console
-          console.log('[WebPilot] Content script backend URL:', backendUrl);
-        }
-      }
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn('[WebPilot] Failed to load backend URL:', err?.message);
-    }
-  })();
-
   // ---------------------------------------------------------------------------
   // Extension context guard
   // ---------------------------------------------------------------------------
@@ -253,8 +233,7 @@
    * Extract from element with automatic selector retry/recovery
    * If the original selector fails, requests AI-powered alternatives from backend
    */
-  // eslint-disable-next-line no-undef
-  async function extractFromElementWithRetry(selector, extractType = 'text', backendUrl = null) {
+  async function extractFromElementWithRetry(selector, extractType = 'text') {
     // First try with original selector
     const originalResult = extractFromElement(selector, extractType);
 
@@ -266,24 +245,32 @@
       return originalResult;
     }
 
-    // Original selector failed — try to get alternatives from backend
-    if (!backendUrl) {
-      // eslint-disable-next-line no-console
-      console.warn('[WebPilot] No backend URL for selector recovery');
-      return originalResult;
-    }
-
+    // Original selector failed — try to get alternatives from background worker
     // eslint-disable-next-line no-console
     console.log('[WebPilot] Original selector failed, requesting alternatives...');
 
     try {
-      // Request alternative selectors from backend
-      // eslint-disable-next-line no-undef
-      const alternatives = await getAlternativeSelectors(
-        backendUrl,
-        selector,
-        { extractType, description: 'Element not found' },
-      );
+      // Send message to background worker to get alternatives
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          {
+            type: 'GET_SELECTOR_ALTERNATIVES',
+            selector,
+            extractType,
+            description: 'Element not found',
+            pageUrl: window.location.href,
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              resolve({ success: false, error: chrome.runtime.lastError.message });
+            } else {
+              resolve(response);
+            }
+          },
+        );
+      });
+
+      const alternatives = response;
 
       if (!alternatives.success || !alternatives.alternatives.length) {
         // eslint-disable-next-line no-console
@@ -1828,7 +1815,6 @@
       const extractedValue = await extractFromElementWithRetry(
         selector,
         step.extractType || 'text',
-        backendUrl,
       );
       const varName = step.variable || 'extracted';
       storeExtractedValue(varName, extractedValue);

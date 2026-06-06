@@ -206,6 +206,53 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true, errors, count: errors.length });
     }).catch(err => sendResponse({ success: false, error: err?.message || err }));
     break;
+  case 'GET_SELECTOR_ALTERNATIVES':
+    // Get AI-powered selector alternatives from backend
+    (async () => {
+      try {
+        const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
+        const backendUrl = serverConfig.url || DEFAULT_SERVER_URL;
+        // eslint-disable-next-line no-console
+        console.log('[WebPilot] Requesting selector alternatives:', message.selector);
+
+        const response = await fetch(`${backendUrl}/api/analyze-selector`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            failingSelector: message.selector,
+            elementDescription: message.description || 'Unknown',
+            extractionType: message.extractType || 'text',
+            pageUrl: message.pageUrl,
+          }),
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(`HTTP ${response.status}: ${text}`);
+        }
+
+        const analysis = await response.json();
+        // eslint-disable-next-line no-console
+        console.log('[WebPilot] Got selector alternatives:', {
+          recommended: analysis.recommended,
+          count: analysis.alternatives.length,
+        });
+
+        sendResponse({
+          success: true,
+          recommended: analysis.recommended,
+          alternatives: analysis.alternatives,
+          confidence: analysis.confidence,
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[WebPilot] Failed to get alternatives:', err?.message);
+        // eslint-disable-next-line no-undef
+        errorTracker.track(err, { operation: 'get-selector-alternatives' });
+        sendResponse({ success: false, error: err?.message || String(err) });
+      }
+    })();
+    break;
   default:
     sendResponse({ error: `Unknown message type: ${message.type}` });
   }
