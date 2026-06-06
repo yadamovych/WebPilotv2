@@ -103,7 +103,9 @@ function persistState() {
       recordingTabId: STATE.recordingTabId,
       steps:          STATE.steps,
     },
-  }).catch(() => {});
+  }).catch((err) => {
+    console.warn('[WebPilot] Failed to persist recording state:', err?.message || err);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +125,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   case 'CLEAR_STEPS':
     STATE.steps = [];
     persistState();
-    chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: [] }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: [] }).catch((err) => {
+      console.warn('[WebPilot] Failed to notify steps cleared:', err?.message || err);
+    });
     sendResponse({ success: true });
     break;
   case 'UPDATE_STEPS':
@@ -288,7 +292,7 @@ async function handleStartRecording(tabId, { noAutoNavigate = false } = {}) {
         auto: true,
       });
       chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch((err) => {
-        console.warn('[WebPilot] Failed to notify steps updated:', err.message);
+        console.warn('[WebPilot] Failed to notify steps updated:', err?.message || err);
       });
     }
 
@@ -348,7 +352,9 @@ function handleRecordAction(action, tabId, sendResponse) {
         timestamp: now,
       };
       persistState();
-      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
+      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch((err) => {
+        console.warn('[WebPilot] Failed to notify steps updated:', err?.message || err);
+      });
       sendResponse({ success: true });
       return;
     }
@@ -371,7 +377,9 @@ function handleRecordAction(action, tabId, sendResponse) {
       timestamp: now,
     });
     persistState();
-    chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch((err) => {
+      console.warn('[WebPilot] Failed to notify steps updated:', err?.message || err);
+    });
   }
   sendResponse({ success: true });
 }
@@ -537,7 +545,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
       total: steps.length,
       step: currentStep,
     }).catch((_err) => {
-      // Popup may be closed, silently ignore
+      // Popup may be closed; gracefully ignore
     });
 
     // Handle navigate actions directly in background (don't send to content script)
@@ -583,7 +591,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
             retryAttempt: attempt,
             retryMax: MAX_RETRIES,
           }).catch((_err) => {
-            // Popup may be closed, silently ignore
+            // Popup may be closed; gracefully ignore
           });
           await delay(RETRY_DELAY_MS);
         }
