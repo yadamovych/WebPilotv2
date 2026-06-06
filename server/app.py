@@ -106,6 +106,22 @@ class PromptRequest(BaseModel):
     systemPrompt: Optional[str] = None
 
 
+class ExtensionErrorRecord(BaseModel):
+    timestamp: str
+    message: str
+    stack: str
+    context: dict
+    url: str
+    type: str
+
+
+class ExtensionErrorReport(BaseModel):
+    exportDate: str
+    extensionVersion: str
+    errorCount: int
+    errors: list[ExtensionErrorRecord]
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -228,6 +244,35 @@ async def prompt_endpoint(request: PromptRequest) -> PromptResponse:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.post("/api/extension-errors", tags=["extension"])
+async def report_extension_errors(report: ExtensionErrorReport) -> dict:
+    """
+    Receive error reports from the WebPilot extension.
+    Logs errors for investigation and monitoring.
+    """
+    logger.error(
+        "[Extension Error Report] version=%s errorCount=%d url_samples=%s",
+        report.extensionVersion,
+        report.errorCount,
+        [e.url for e in report.errors[:3]],  # Log first 3 URLs
+    )
+
+    # Log each error with full context for debugging
+    for error in report.errors:
+        logger.error(
+            "[Extension Error] timestamp=%s type=%s message=%s context=%s url=%s",
+            error.timestamp,
+            error.type,
+            error.message,
+            error.context,
+            error.url,
+        )
+        if error.stack:
+            logger.debug("[Extension Error Stack]\n%s", error.stack)
+
+    return {"success": True, "message": f"Received {report.errorCount} errors"}
+
+
 # ---------------------------------------------------------------------------
 # WebSocket endpoint
 # ---------------------------------------------------------------------------
@@ -285,7 +330,12 @@ def _extract_json(text: str) -> dict:
     text = text.strip()
 
     # 0. Strip reasoning/thinking tags that some models include (e.g., <think>...</think>, <analysis>...</analysis>)
-    text = re.sub(r"<(think|analysis|reasoning|reflection)>.*?</\1>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+    text = re.sub(
+        r"<(think|analysis|reasoning|reflection)>.*?</\1>",
+        "",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    ).strip()
 
     # 1. Direct parse
     try:

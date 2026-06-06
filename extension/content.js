@@ -172,7 +172,15 @@
     const el = document.querySelector(selector);
     const matchCount = document.querySelectorAll(selector).length;
     if (!el) {
-      console.warn(`[WebPilot] Selector "${selector}" matched 0 elements`);
+      const msg = `Selector "${selector}" matched 0 elements`;
+      console.warn(`[WebPilot] ${msg}`);
+      // Track this warning for error reporting
+      if (typeof errorTracker !== 'undefined') {
+        errorTracker.track(
+          new Error(msg),
+          { context: 'extractFromElement', extractType, selector },
+        );
+      }
       return '';
     }
 
@@ -213,6 +221,10 @@
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(`[WebPilot] Error extracting from ${selector}:`, err);
+      // Track extraction errors
+      if (typeof errorTracker !== 'undefined') {
+        errorTracker.track(err, { context: 'extractFromElement', selector });
+      }
       return '';
     }
   }
@@ -1793,6 +1805,13 @@
             } else {
               // eslint-disable-next-line no-console
               console.warn(`[WebPilot] Extracted variable not found or undefined: [[extracted.${varName}]]`);
+              // Track missing extracted variables
+              if (typeof errorTracker !== 'undefined') {
+                errorTracker.track(
+                  new Error(`Extracted variable not found: ${varName}`),
+                  { context: 'resolveExtractedVariables', varName },
+                );
+              }
             }
           } catch (err) {
             // eslint-disable-next-line no-console
@@ -1821,6 +1840,10 @@
           typeEl.dispatchEvent(new InputEvent('input', { bubbles: true, data: htmlValue }));
         } catch (err) {
           console.warn('[WebPilot] execCommand failed, falling back to innerHTML:', err);
+          // Track execCommand failures
+          if (typeof errorTracker !== 'undefined') {
+            errorTracker.track(err, { context: 'typeContentEditable', method: 'execCommand' });
+          }
           try {
             typeEl.innerHTML = htmlValue;
             typeEl.dispatchEvent(new InputEvent('input', { bubbles: true, data: htmlValue }));
@@ -1861,6 +1884,10 @@
               nativeSetter.call(typeEl, String(finalValue ?? ''));
             } catch (err) {
               console.warn('[WebPilot] Native setter failed, using direct assignment:', err);
+              // Track native setter failures
+              if (typeof errorTracker !== 'undefined') {
+                errorTracker.track(err, { context: 'typeElement', method: 'nativeSetter' });
+              }
               typeEl.value = String(finalValue ?? '');
             }
           } else {

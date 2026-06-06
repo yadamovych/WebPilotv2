@@ -3,6 +3,10 @@
 
 'use strict';
 
+// Import centralized error tracking and safe utilities
+// eslint-disable-next-line no-undef
+importScripts('error-handler.js');
+
 // ---------------------------------------------------------------------------
 // Open the side panel instead of a popup when the toolbar icon is clicked
 // ---------------------------------------------------------------------------
@@ -94,16 +98,31 @@ const DEFAULT_SERVER_URL = 'http://localhost:8000';
       STATE.steps          = recordingState.steps          ?? [];
     }
   } catch (_) { /* storage.session unavailable on very old Chrome — ignore */ }
+
+  // Start periodic error reporting to backend
+  try {
+    const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
+    const backendUrl = serverConfig.url || DEFAULT_SERVER_URL;
+    // eslint-disable-next-line no-undef, no-console
+    console.log('[WebPilot] Starting error reporter to:', backendUrl);
+    // eslint-disable-next-line no-undef
+    startErrorReporting(backendUrl, 1); // Report every 1 minute for testing
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[WebPilot] Error reporting setup failed:', err?.message || err);
+  }
 })();
 
 function persistState() {
-  chrome.storage.session.set({
+  safeStor.set({
     recordingState: {
       recording:      STATE.recording,
       recordingTabId: STATE.recordingTabId,
       steps:          STATE.steps,
     },
-  }).catch(() => {});
+  }).catch((err) => {
+    errorTracker.track(err, { context: 'persistState' });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +142,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   case 'CLEAR_STEPS':
     STATE.steps = [];
     persistState();
-    chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: [] }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: [] }).catch((err) => {
+      errorTracker.track(err, { context: 'notifyStepsCleared' });
+    });
     sendResponse({ success: true });
     break;
   case 'UPDATE_STEPS':
@@ -163,6 +184,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.local.set({ serverConfig: message.config })
       .then(() => sendResponse({ success: true }))
       .catch(err => sendResponse({ error: err.message }));
+    break;
+  case 'REPORT_ERRORS':
+    // Manual error reporting for debugging
+    (async () => {
+      try {
+        const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
+        const backendUrl = serverConfig.url || DEFAULT_SERVER_URL;
+        // eslint-disable-next-line no-undef
+        const result = await reportErrorsToBackend(backendUrl);
+        sendResponse(result);
+      } catch (err) {
+        sendResponse({ success: false, error: err?.message || err });
+      }
+    })();
+    break;
+  case 'GET_ERRORS':
+    // Get all tracked errors for debugging
+    // eslint-disable-next-line no-undef
+    errorTracker.getErrors().then((errors) => {
+      sendResponse({ success: true, errors, count: errors.length });
+    }).catch(err => sendResponse({ success: false, error: err?.message || err }));
     break;
   default:
     sendResponse({ error: `Unknown message type: ${message.type}` });
@@ -288,7 +330,7 @@ async function handleStartRecording(tabId, { noAutoNavigate = false } = {}) {
         auto: true,
       });
       chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch((err) => {
-        console.warn('[WebPilot] Failed to notify steps updated:', err.message);
+        console.warn('[WebPilot] Failed to notify steps updated:', err?.message || err);
       });
     }
 
@@ -348,7 +390,9 @@ function handleRecordAction(action, tabId, sendResponse) {
         timestamp: now,
       };
       persistState();
-      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
+      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch((err) => {
+        console.warn('[WebPilot] Failed to notify steps updated:', err?.message || err);
+      });
       sendResponse({ success: true });
       return;
     }
@@ -371,7 +415,9 @@ function handleRecordAction(action, tabId, sendResponse) {
       timestamp: now,
     });
     persistState();
-    chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch((err) => {
+      console.warn('[WebPilot] Failed to notify steps updated:', err?.message || err);
+    });
   }
   sendResponse({ success: true });
 }
@@ -537,7 +583,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
       total: steps.length,
       step: currentStep,
     }).catch((_err) => {
-      // Popup may be closed, silently ignore
+      // Popup may be closed; gracefully ignore
     });
 
     // Handle navigate actions directly in background (don't send to content script)
@@ -583,7 +629,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
             retryAttempt: attempt,
             retryMax: MAX_RETRIES,
           }).catch((_err) => {
-            // Popup may be closed, silently ignore
+            // Popup may be closed; gracefully ignore
           });
           await delay(RETRY_DELAY_MS);
         }
