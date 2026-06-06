@@ -200,6 +200,12 @@ const safeStor = {
 async function reportErrorsToBackend(backendUrl) {
   try {
     const report = await errorTracker.exportErrors();
+
+    // Don't report if no errors
+    if (report.errorCount === 0) {
+      return { success: true, message: 'No errors to report' };
+    }
+
     const response = await fetch(`${backendUrl}/api/extension-errors`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -209,11 +215,31 @@ async function reportErrorsToBackend(backendUrl) {
       throw new Error(`HTTP ${response.status}`);
     }
     await errorTracker.clearErrors();
-    return { success: true };
+    return { success: true, message: `Reported ${report.errorCount} errors` };
   } catch (error) {
     errorTracker.track(error, { operation: 'report-to-backend' });
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Start periodic error reporting (call from background.js)
+ */
+function startErrorReporting(backendUrl, intervalMinutes = 5) {
+  // Report immediately if there are errors
+  reportErrorsToBackend(backendUrl);
+
+  // Then schedule periodic reporting
+  setInterval(async () => {
+    const result = await reportErrorsToBackend(backendUrl);
+    if (result.success) {
+      // eslint-disable-next-line no-console
+      console.log('[WebPilot] Error report sent:', result.message);
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn('[WebPilot] Error report failed:', result.error);
+    }
+  }, intervalMinutes * 60 * 1000);
 }
 
 // Export for use in other scripts
@@ -226,5 +252,6 @@ if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
     sendMessageSafe,
     safeStor,
     reportErrorsToBackend,
+    startErrorReporting,
   };
 }

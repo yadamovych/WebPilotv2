@@ -4,6 +4,7 @@
 'use strict';
 
 // Import centralized error tracking and safe utilities
+// eslint-disable-next-line no-undef
 importScripts('error-handler.js');
 
 // ---------------------------------------------------------------------------
@@ -97,6 +98,14 @@ const DEFAULT_SERVER_URL = 'http://localhost:8000';
       STATE.steps          = recordingState.steps          ?? [];
     }
   } catch (_) { /* storage.session unavailable on very old Chrome — ignore */ }
+
+  // Start periodic error reporting to backend
+  try {
+    const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
+    const backendUrl = serverConfig.url || DEFAULT_SERVER_URL;
+    // eslint-disable-next-line no-undef
+    startErrorReporting(backendUrl, 5); // Report every 5 minutes
+  } catch (_) { /* error reporting setup failed — silently continue */ }
 })();
 
 function persistState() {
