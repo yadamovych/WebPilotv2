@@ -21,6 +21,26 @@
   }
   window.__webpilotLoaded = true;
 
+  // Global backend URL for selector recovery and error reporting
+  let backendUrl = 'http://localhost:8000';
+
+  // Initialize backend URL from storage
+  (async () => {
+    try {
+      if (chrome?.storage?.local) {
+        const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
+        if (serverConfig.url) {
+          backendUrl = serverConfig.url;
+          // eslint-disable-next-line no-console
+          console.log('[WebPilot] Content script backend URL:', backendUrl);
+        }
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[WebPilot] Failed to load backend URL:', err?.message);
+    }
+  })();
+
   // ---------------------------------------------------------------------------
   // Extension context guard
   // ---------------------------------------------------------------------------
@@ -226,6 +246,95 @@
         errorTracker.track(err, { context: 'extractFromElement', selector });
       }
       return '';
+    }
+  }
+
+  /**
+   * Extract from element with automatic selector retry/recovery
+   * If the original selector fails, requests AI-powered alternatives from backend
+   */
+  // eslint-disable-next-line no-undef
+  async function extractFromElementWithRetry(selector, extractType = 'text', backendUrl = null) {
+    // First try with original selector
+    const originalResult = extractFromElement(selector, extractType);
+
+    // If successful, return
+    const matchCount = document.querySelectorAll(selector).length;
+    if (matchCount > 0 && originalResult) {
+      // eslint-disable-next-line no-console
+      console.log('[WebPilot] Extraction succeeded with original selector');
+      return originalResult;
+    }
+
+    // Original selector failed — try to get alternatives from backend
+    if (!backendUrl) {
+      // eslint-disable-next-line no-console
+      console.warn('[WebPilot] No backend URL for selector recovery');
+      return originalResult;
+    }
+
+    // eslint-disable-next-line no-console
+    console.log('[WebPilot] Original selector failed, requesting alternatives...');
+
+    try {
+      // Request alternative selectors from backend
+      // eslint-disable-next-line no-undef
+      const alternatives = await getAlternativeSelectors(
+        backendUrl,
+        selector,
+        { extractType, description: 'Element not found' },
+      );
+
+      if (!alternatives.success || !alternatives.alternatives.length) {
+        // eslint-disable-next-line no-console
+        console.warn('[WebPilot] No alternatives available');
+        return originalResult;
+      }
+
+      // Try each alternative selector in order of flexibility
+      for (const alt of alternatives.alternatives) {
+        const altResult = extractFromElement(alt.selector, extractType);
+        const altMatchCount = document.querySelectorAll(alt.selector).length;
+
+        if (altMatchCount > 0 && altResult) {
+          // eslint-disable-next-line no-console
+          console.log(
+            `[WebPilot] ✅ Selector recovery succeeded!\nOriginal: ${selector}\nRecovered with: ${alt.selector}\nFlexibility: ${alt.flexibility}`,
+          );
+
+          // Track successful recovery
+          if (typeof errorTracker !== 'undefined') {
+            errorTracker.track(
+              new Error('Selector Recovery Success'),
+              {
+                context: 'extractFromElementWithRetry',
+                original: selector,
+                recovered: alt.selector,
+                flexibility: alt.flexibility,
+                extractType,
+              },
+            );
+          }
+
+          return altResult;
+        }
+      }
+
+      // None of the alternatives worked
+      // eslint-disable-next-line no-console
+      console.warn('[WebPilot] No alternative selectors matched');
+      return originalResult;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[WebPilot] Error during selector recovery:', err);
+      if (typeof errorTracker !== 'undefined') {
+        errorTracker.track(err, {
+          context: 'extractFromElementWithRetry',
+          selector,
+          stage: 'recovery-attempt',
+        });
+      }
+      return originalResult;
     }
   }
 
@@ -1716,7 +1825,11 @@
     }
 
     if (action === 'extract') {
-      const extractedValue = extractFromElement(selector, step.extractType || 'text');
+      const extractedValue = await extractFromElementWithRetry(
+        selector,
+        step.extractType || 'text',
+        backendUrl,
+      );
       const varName = step.variable || 'extracted';
       storeExtractedValue(varName, extractedValue);
       const preview = extractedValue.substring(0, 50) + (extractedValue.length > 50 ? '...' : '');
