@@ -286,6 +286,79 @@
   }
 
   /**
+   * Request AI-powered alternative selectors from the backend for a failing
+   * selector. Returns an array of { selector, flexibility, ... } (possibly empty).
+   * Shared by extract recovery and action (click/type/select) recovery.
+   */
+  async function getSelectorAlternatives(selector, { extractType = 'text', description = 'Element not found or not ready' } = {}) {
+    try {
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          {
+            type: 'GET_SELECTOR_ALTERNATIVES',
+            selector,
+            extractType,
+            description,
+            pageUrl: window.location.href,
+          },
+          (resp) => {
+            if (chrome.runtime.lastError) {
+              resolve({ success: false, error: chrome.runtime.lastError.message });
+            } else {
+              resolve(resp);
+            }
+          },
+        );
+      });
+
+      if (!response?.success || !response.alternatives?.length) {
+        return [];
+      }
+      return response.alternatives;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[WebPilot] Error fetching selector alternatives:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Resolve an element for an action step (click/type/select/key), with the
+   * same AI-powered selector recovery used for extraction.
+   * Returns the resolved Element, or null if neither the original selector nor
+   * any alternative matched.
+   */
+  async function resolveElementWithRetry(selector, timeoutMs, description) {
+    const el = await waitForElement(selector, timeoutMs);
+    if (el) {
+      return el;
+    }
+
+    // eslint-disable-next-line no-console
+    console.warn(`[WebPilot] Selector not found, requesting alternatives: ${selector}`);
+    const alternatives = await getSelectorAlternatives(selector, { description });
+
+    for (const alt of alternatives) {
+      const altEl = await waitForElement(alt.selector, 3000);
+      if (altEl) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[WebPilot] ✅ Action selector recovery succeeded!\nOriginal: ${selector}\nRecovered with: ${alt.selector}\nFlexibility: ${alt.flexibility}`,
+        );
+        if (typeof errorTracker !== 'undefined') {
+          errorTracker.track(
+            new Error('Selector Recovery Success'),
+            { context: 'resolveElementWithRetry', original: selector, recovered: alt.selector, flexibility: alt.flexibility },
+          );
+        }
+        return altEl;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Extract from element with automatic selector retry/recovery
    * If the original selector fails, requests AI-powered alternatives from backend
    */
@@ -311,36 +384,19 @@
 
     // Element not available or extraction failed — try to get alternatives from backend
     try {
-      // Send message to background worker to get alternatives
-      const response = await new Promise((resolve) => {
-        chrome.runtime.sendMessage(
-          {
-            type: 'GET_SELECTOR_ALTERNATIVES',
-            selector,
-            extractType,
-            description: 'Element not found or not ready',
-            pageUrl: window.location.href,
-          },
-          (response) => {
-            if (chrome.runtime.lastError) {
-              resolve({ success: false, error: chrome.runtime.lastError.message });
-            } else {
-              resolve(response);
-            }
-          },
-        );
+      const alternativesList = await getSelectorAlternatives(selector, {
+        extractType,
+        description: 'Element not found or not ready',
       });
 
-      const alternatives = response;
-
-      if (!alternatives.success || !alternatives.alternatives.length) {
+      if (!alternativesList.length) {
         // eslint-disable-next-line no-console
         console.warn('[WebPilot] No alternatives available');
         return '';
       }
 
       // Try each alternative selector in order of flexibility
-      for (const alt of alternatives.alternatives) {
+      for (const alt of alternativesList) {
         try {
           // Wait for alternative selector too
           const altEl = await waitForElement(alt.selector, 3000);
@@ -1950,7 +2006,7 @@
 
     // After a navigate the new page may still be rendering — use a longer timeout
     const waitTimeout = afterNavigate ? 20000 : 6000;
-    const el = await waitForElement(selector, waitTimeout);
+    const el = await resolveElementWithRetry(selector, waitTimeout, step.description || `${action} target`);
     if (!el) {
       throw new Error(`Element not found: ${selector}`);
     }

@@ -9,8 +9,12 @@ class ErrorTracker {
   constructor() {
     this.errors = [];
     this.maxErrors = 50;
-    this.isContentScript = typeof window !== 'undefined' && !chrome.runtime;
-    this.isSW = typeof chrome !== 'undefined' && chrome.runtime?.id;
+    const hasRuntime = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
+    const hasWindow = typeof window !== 'undefined';
+    // Service worker: extension runtime available, no DOM window.
+    this.isSW = hasRuntime && !hasWindow;
+    // Content script: extension runtime available AND a DOM window present.
+    this.isContentScript = hasRuntime && hasWindow;
   }
 
   /**
@@ -47,7 +51,7 @@ class ErrorTracker {
   }
 
   /**
-   * Persist errors to chrome.storage
+   * Persist errors to chrome.storage (SW) or forward to the SW (content script)
    */
   persistError(errorRecord) {
     try {
@@ -61,9 +65,19 @@ class ErrorTracker {
           }
           chrome.storage.local.set({ webpilot_errors: errors });
         });
+      } else if (this.isContentScript) {
+        // Content scripts lack storage permissions; forward the record to the
+        // service worker, which owns chrome.storage.local.
+        chrome.runtime.sendMessage(
+          { type: 'TRACK_ERROR', errorRecord },
+          () => {
+            // Swallow lastError (e.g. SW asleep); the in-memory log still holds it.
+            void chrome.runtime.lastError;
+          },
+        );
       }
     } catch (e) {
-      // Silently fail if storage unavailable
+      // Silently fail if storage/messaging unavailable
     }
   }
 

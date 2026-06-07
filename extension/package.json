@@ -6,7 +6,7 @@
   "scripts": {
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
-    "test": "echo \"No tests configured for extension\""
+    "test": "node --test"
   },
   "devDependencies": {
     "eslint": "^8.56.0"

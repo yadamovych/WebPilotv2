@@ -206,6 +206,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true, errors, count: errors.length });
     }).catch(err => sendResponse({ success: false, error: err?.message || err }));
     break;
+  case 'TRACK_ERROR':
+    // Persist an error forwarded from a content script (which lacks storage
+    // permissions). The record is already in the content-script schema.
+    // eslint-disable-next-line no-undef
+    if (message.errorRecord) {
+      // eslint-disable-next-line no-undef
+      errorTracker.persistError(message.errorRecord);
+    }
+    sendResponse({ success: true });
+    break;
   case 'GET_SELECTOR_ALTERNATIVES':
     // Get AI-powered selector alternatives from backend
     (async () => {
@@ -657,6 +667,9 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
       // For non-navigate actions, send to content script with retries
       const MAX_RETRIES = 3;
       const RETRY_DELAY_MS = 1000;
+      // Record the URL before the action so we can detect navigations it triggers.
+      const tabBefore = await chrome.tabs.get(tabId).catch(() => null);
+      const urlBeforeStep = tabBefore?.url ?? '';
       let result;
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         // Execution logging removed - comment out if needed for debugging
@@ -709,6 +722,17 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
           } catch (err) {
             console.error('[WebPilot] Failed to store extracted variables:', err);
           }
+        }
+      }
+
+      // If the action may have triggered a navigation (e.g. clicking a link or
+      // submit button, or pressing Enter), wait for the page to settle before
+      // advancing — otherwise the next step runs against a half-loaded page.
+      if (currentStep.action === 'click' || currentStep.action === 'key') {
+        const navigated = await waitForPossibleNavigation(tabId, urlBeforeStep);
+        if (navigated) {
+          await ensureContentScript(tabId);
+          await delay(300);
         }
       }
 
@@ -892,8 +916,32 @@ function waitForTabLoad(tabId, timeoutMs = 15000) {
 }
 
 /**
- * Ensure content.js is running in the given tab.
+ * After an action step (click/key), detect whether it triggered a navigation
+ * and, if so, wait for the new page to finish loading.
  *
+ * Detection: poll the tab briefly. If within ~1.2 s the tab enters the
+ * 'loading' state or its URL changes, treat it as a navigation and wait for
+ * status 'complete'. Returns true if a navigation was awaited, false otherwise.
+ */
+async function waitForPossibleNavigation(tabId, urlBefore, detectMs = 1200) {
+  const start = Date.now();
+  while (Date.now() - start < detectMs) {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (!tab) {
+      return false;
+    }
+    if (tab.status === 'loading' || (tab.url && tab.url !== urlBefore)) {
+      await waitForTabLoad(tabId);
+      await delay(300); // settling delay for SPAs that render after load
+      return true;
+    }
+    await delay(150);
+  }
+  return false;
+}
+
+/**
+ * Ensure content.js is running in the given tab.
  * Strategy:
  *  1. Ping the tab — if it responds, the content script is already alive.
  *  2. If ping times out or the port is closed, inject content.js via
