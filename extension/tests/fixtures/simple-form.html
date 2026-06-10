@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebPilot E2E — Login Form</title>
+</head>
+<body>
+  <h1>Login</h1>
+  <form id="login-form">
+    <label>
+      Username
+      <input data-testid="username" type="text" autocomplete="username">
+    </label>
+    <label>
+      Password
+      <input data-testid="password" type="password" autocomplete="current-password">
+    </label>
+    <button data-testid="submit" type="submit">Log in</button>
+  </form>
+  <div id="success" data-testid="success" hidden>Logged in!</div>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const user = document.querySelector('[data-testid="username"]').value;
+      const pass = document.querySelector('[data-testid="password"]').value;
+      if (user === 'testuser' && pass === 'secret123') {
+        document.getElementById('success').hidden = false;
+      }
+    });
+  </script>
+</body>
+</html>

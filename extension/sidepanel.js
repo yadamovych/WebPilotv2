@@ -1,5 +1,5 @@
 // sidepanel.js — Side Panel extras
-// Runs after popup.js; wires up the Copilot-style quick-prompt bar
+// Runs after popup modules; wires up the Copilot-style quick-prompt bar
 // at the top of the Workflows tab.
 
 (function () {

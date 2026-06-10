@@ -233,9 +233,53 @@ test('reportErrorsToBackend() returns failure on non-OK response', async () => {
   mod.errorTracker.track(new Error('report me'));
   await new Promise((r) => setTimeout(r, 0));
 
-  global.fetch = async () => ({ ok: false, status: 500, text: async () => 'server boom' });
+  global.fetch = async () => ({ ok: false, status: 500, text: async () => 'internal error' });
   const result = await mod.reportErrorsToBackend('http://localhost:8000');
   assert.strictEqual(result.success, false);
   assert.match(result.error, /500/);
   delete global.fetch;
+});
+
+test('reportErrorsToBackend() does not enqueue a reporting failure', async () => {
+  const { mod } = loadHandler();
+  mod.errorTracker.track(new Error('original'));
+  await new Promise((r) => setTimeout(r, 0));
+
+  global.fetch = async () => ({ ok: false, status: 500, text: async () => 'fail' });
+  await mod.reportErrorsToBackend('http://localhost:8000');
+
+  const remaining = await mod.errorTracker.getErrors();
+  assert.strictEqual(remaining.length, 1);
+  assert.strictEqual(remaining[0].message, 'original');
+  delete global.fetch;
+});
+
+test('startErrorReporting() replaces an existing interval', () => {
+  const { mod } = loadHandler();
+  const calls = [];
+  const originalSetInterval = global.setInterval;
+  const originalClearInterval = global.clearInterval;
+
+  global.setInterval = (fn, ms) => {
+    calls.push(['set', ms]);
+    return 101;
+  };
+  global.clearInterval = (id) => {
+    calls.push(['clear', id]);
+  };
+
+  mod.startErrorReporting('http://localhost:8000', 5);
+  mod.startErrorReporting('http://localhost:8000', 10);
+
+  assert.deepStrictEqual(calls, [
+    ['set', 5 * 60 * 1000],
+    ['clear', 101],
+    ['set', 10 * 60 * 1000],
+  ]);
+
+  mod.stopErrorReporting();
+  assert.deepStrictEqual(calls.at(-1), ['clear', 101]);
+
+  global.setInterval = originalSetInterval;
+  global.clearInterval = originalClearInterval;
 });

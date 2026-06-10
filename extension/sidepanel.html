@@ -206,6 +206,17 @@
         </div>
 
         <div class="form-group form-group-toggle">
+          <label for="ai-selector-recovery" class="toggle-label">
+            AI selector recovery
+            <span class="label-hint">(extra API calls when elements aren't found — uses many tokens)</span>
+          </label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="ai-selector-recovery" />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+
+        <div class="form-group form-group-toggle">
           <label for="dev-mode" class="toggle-label">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
             Dev Mode
@@ -241,7 +252,18 @@
       </div>
     </div>
   </div>
-  <script src="popup.js"></script>
+  <script src="popup/core.js"></script>
+  <script src="popup/utils.js"></script>
+  <script src="popup/tabs.js"></script>
+  <script src="popup/settings.js"></script>
+  <script src="popup/templates.js"></script>
+  <script src="popup/playback.js"></script>
+  <script src="popup/recording.js"></script>
+  <script src="popup/steps.js"></script>
+  <script src="popup/messages.js"></script>
+  <script src="popup/events.js"></script>
+  <script src="popup/init-bootstrap.js"></script>
+  <script src="popup/init-exports.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

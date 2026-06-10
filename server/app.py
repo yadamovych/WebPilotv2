@@ -8,9 +8,11 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
+from collections import defaultdict
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -24,6 +26,20 @@ from config import Settings
 settings = Settings()
 logger = logging.getLogger("webpilot")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
+
+_rate_buckets: dict[str, list[float]] = defaultdict(list)
+_playback_logs: list[dict] = []
+RATE_LIMIT_PER_MINUTE = 30
+RATE_WINDOW_SEC = 60
+
+
+def _check_rate_limit(client_id: str) -> None:
+    now = time.time()
+    bucket = [t for t in _rate_buckets[client_id] if now - t < RATE_WINDOW_SEC]
+    if len(bucket) >= RATE_LIMIT_PER_MINUTE:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded — try again shortly")
+    bucket.append(now)
+    _rate_buckets[client_id] = bucket
 
 app = FastAPI(
     title="WebPilot AI Server",
@@ -122,6 +138,17 @@ class ExtensionErrorReport(BaseModel):
     errors: list[ExtensionErrorRecord]
 
 
+class PlaybackLogRequest(BaseModel):
+    templateId: str = ""
+    templateName: str = ""
+    success: bool = False
+    steps: list[dict] = Field(default_factory=list)
+    startedAt: Optional[int] = None
+    finishedAt: Optional[int] = None
+    variables: dict[str, str] = Field(default_factory=dict)
+    error: Optional[str] = None
+
+
 class SelectorAnalysisRequest(BaseModel):
     failingSelector: str = Field(..., description="CSS selector that failed to match any elements")
     elementDescription: Optional[str] = Field(None, description="Human-readable description of what element to target")
@@ -191,7 +218,7 @@ async def health() -> dict:
 
 
 @app.post("/api/fill-template", response_model=FillTemplateResponse, tags=["ai"])
-async def fill_template(request: FillTemplateRequest) -> FillTemplateResponse:
+async def fill_template(request: FillTemplateRequest, req: Request) -> FillTemplateResponse:
     """
     Given a natural language user request and a list of TEMPLATE VARIABLE names,
     ask the AI to generate appropriate string values for each variable.
@@ -199,6 +226,9 @@ async def fill_template(request: FillTemplateRequest) -> FillTemplateResponse:
     Note: This endpoint handles TEMPLATE VARIABLES ({{varName}}) only.
     EXTRACTED VARIABLES ([[extracted.varName]]) are resolved client-side during playback.
     """
+    client_id = req.client.host if req.client else "unknown"
+    _check_rate_limit(client_id)
+
     if not request.variables:
         return FillTemplateResponse(variables={})
 
@@ -296,11 +326,38 @@ async def report_extension_errors(report: ExtensionErrorReport) -> dict:
     return {"success": True, "message": f"Received {report.errorCount} errors"}
 
 
+@app.post("/api/playback-logs", tags=["extension"])
+async def report_playback_log(report: PlaybackLogRequest) -> dict:
+    """Receive structured playback run reports from the extension."""
+    entry = report.model_dump()
+    entry["receivedAt"] = int(time.time() * 1000)
+    _playback_logs.append(entry)
+    if len(_playback_logs) > 200:
+        _playback_logs.pop(0)
+    logger.info(
+        "[Playback] template=%s success=%s steps=%d error=%s",
+        report.templateName or report.templateId,
+        report.success,
+        len(report.steps),
+        report.error,
+    )
+    return {"success": True}
+
+
+@app.get("/api/playback-logs", tags=["extension"])
+async def list_playback_logs(limit: int = 20) -> dict:
+    """Return recent playback logs (dev/debug)."""
+    return {"logs": _playback_logs[-limit:]}
+
+
 @app.post("/api/analyze-selector", tags=["extension"])
 async def analyze_selector_error(request: SelectorAnalysisRequest) -> SelectorAnalysisResponse:
     """
-    Analyze failing CSS selectors and generate more robust alternatives using Groq.
-    Uses fast Llama/Mixtral models for real-time suggestions.
+    Analyze failing CSS selectors and suggest alternatives using AI.
+
+    Disabled by default in the extension (aiSelectorRecovery setting) because
+    each failed step/retry can trigger a separate LLM call. Enable only when
+    recorded selectors are frequently stale.
     """
     try:
         # Build analysis prompt

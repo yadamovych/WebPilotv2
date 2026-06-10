@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebPilot E2E — Extract &amp; Fill</title>
+</head>
+<body>
+  <h1>Extract and Fill</h1>
+  <p data-testid="source-text">Hello from page</p>
+  <label>
+    Target field
+    <input data-testid="target-field" type="text">
+  </label>
+  <div id="result" data-testid="result" hidden></div>
+  <script>
+    document.querySelector('[data-testid="target-field"]').addEventListener('input', (e) => {
+      const result = document.getElementById('result');
+      if (e.target.value === 'Hello from page') {
+        result.textContent = 'Match!';
+        result.hidden = false;
+      } else {
+        result.hidden = true;
+      }
+    });
+  </script>
+</body>
+</html>

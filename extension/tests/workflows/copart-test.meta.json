@@ -1,0 +1,13 @@
+{
+  "userRequest": "search discovery with odometer under 50000 miles",
+  "timeoutMs": 300000,
+  "useMockServer": true,
+  "mockVariables": {
+    "odometerSliderMaxValue": "50000"
+  },
+  "assertions": {
+    "urlIncludes": "notes\\.io",
+    "selectorNotEmpty": "#notesTextAreaID",
+    "selectorNotContains": "[[extracted."
+  }
+}

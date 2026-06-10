@@ -2,13 +2,22 @@
   "name": "webpilot-extension",
   "version": "1.0.0",
   "description": "Automate routine web tasks with AI-powered templates",
-  "main": "popup.js",
+  "main": "popup/core.js",
   "scripts": {
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
-    "test": "node --test"
+    "test": "node --test tests/*.test.js",
+    "test:headless": "node tests/headless-runner/run-workflow.mjs",
+    "test:e2e": "playwright test --config tests/e2e/playwright.config.js --grep-invert \"workflow runner\"",
+    "test:e2e:workflow": "node tests/e2e/run-workflow.js",
+    "test:e2e:auth": "node tests/e2e/auth.setup.js",
+    "test:e2e:setup": "playwright install chromium && playwright install-deps chromium",
+    "test:e2e:ci": "xvfb-run -a npm run test:e2e",
+    "test:all": "npm run test && npm run test:e2e:ci",
+    "postinstall": "playwright install chromium"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "eslint": "^8.56.0"
   },
   "keywords": [
