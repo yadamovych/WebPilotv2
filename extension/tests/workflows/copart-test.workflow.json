@@ -1,0 +1,132 @@
+{
+  "createdAt": 1780751165576,
+  "id": "9735723b-ffeb-4dde-afab-b233f6d0c060",
+  "name": "test",
+  "description": "Copart search → filter → extract → notes.io (recorded workflow)",
+  "steps": [
+    {
+      "action": "navigate",
+      "auto": true,
+      "description": "Navigate to https://www.copart.com/",
+      "label": "Navigate to https://www.copart.com/",
+      "value": "https://www.copart.com/"
+    },
+    {
+      "action": "type",
+      "description": "Search inventory",
+      "elementHint": "INPUT[type=text][#input-search]",
+      "label": "Search inventory",
+      "selector": "#input-search",
+      "suggestedVar": "searchInventory",
+      "value": "discovery"
+    },
+    {
+      "action": "click",
+      "description": "Search",
+      "elementHint": "SPAN",
+      "label": "Search",
+      "selector": "span.header-sprite.search-icon"
+    },
+    {
+      "action": "click",
+      "description": "Last 7 Days",
+      "elementHint": "INPUT[type=checkbox][name=NLTS][#expected_sale_assigned_ts_utc__NOW_DAY_7DAY_TO_NOW_DAY_]",
+      "label": "Last 7 Days",
+      "selector": "#expected_sale_assigned_ts_utc__NOW_DAY_7DAY_TO_NOW_DAY_"
+    },
+    {
+      "action": "type",
+      "description": "Last 7 Days",
+      "elementHint": "INPUT[type=checkbox][name=NLTS][#expected_sale_assigned_ts_utc__NOW_DAY_7DAY_TO_NOW_DAY_]",
+      "label": "Last 7 Days",
+      "selector": "#expected_sale_assigned_ts_utc__NOW_DAY_7DAY_TO_NOW_DAY_",
+      "suggestedVar": "last7Days",
+      "value": "Last 7 Days"
+    },
+    {
+      "action": "click",
+      "description": "Clean Title (4)",
+      "elementHint": "INPUT[type=checkbox][name=TITL][#title_group_code_TITLEGROUP_C]",
+      "label": "Clean Title (4)",
+      "selector": "#title_group_code_TITLEGROUP_C"
+    },
+    {
+      "action": "type",
+      "description": "Clean Title (4)",
+      "elementHint": "INPUT[type=checkbox][name=TITL][#title_group_code_TITLEGROUP_C]",
+      "label": "Clean Title (4)",
+      "selector": "#title_group_code_TITLEGROUP_C",
+      "suggestedVar": "cleanTitle4",
+      "value": "Clean Title"
+    },
+    {
+      "action": "type",
+      "description": "Type {{odometerSliderMaxValue}} into \"Odometer Slider Max Value\"",
+      "elementHint": "INPUT[type=number][name=maxValue]",
+      "label": "Odometer Slider Max Value",
+      "selector": "input[name=\"maxValue\"]",
+      "suggestedVar": "odometerSliderMaxValue",
+      "value": "{{odometerSliderMaxValue}}"
+    },
+    {
+      "action": "click",
+      "description": "Apply",
+      "elementHint": "BUTTON",
+      "label": "Apply",
+      "selector": "span.d-f.j-c_e:nth-of-type(3) > button.btn.btn-primary"
+    },
+    {
+      "action": "type",
+      "description": "From:",
+      "elementHint": "INPUT[type=date]",
+      "fieldType": "date",
+      "label": "From:",
+      "selector": "#collapseinside18",
+      "suggestedVar": "from",
+      "value": ""
+    },
+    {
+      "action": "extract",
+      "description": "Extract text → {{title}}",
+      "elementHint": "H1",
+      "extractType": "text",
+      "label": "2020 LAND ROVER DISCOVERY SPORT SE",
+      "selector": "h1.ldp-header-title.p-mt-0",
+      "variable": "title"
+    },
+    {
+      "action": "extract",
+      "description": "Extract text → {{extracted_value}}",
+      "elementHint": "SPAN",
+      "extractType": "text",
+      "label": "$16,271.00",
+      "selector": "span.currencyAmount:nth-of-type(1)",
+      "variable": "extracted_value"
+    },
+    {
+      "action": "extract",
+      "description": "Extract text → {{sport_utility_vehicle}}",
+      "elementHint": "SPAN",
+      "extractType": "text",
+      "label": "Sport Utility Vehicle",
+      "selector": "div.lot-details-information.ng-star-inserted:nth-of-type(14) > span.lot-details-information-value",
+      "variable": "sport_utility_vehicle"
+    },
+    {
+      "action": "navigate",
+      "auto": true,
+      "description": "Navigate to https://notes.io/",
+      "label": "Navigate to https://notes.io/",
+      "value": "https://notes.io/"
+    },
+    {
+      "action": "type",
+      "description": "Fill with [[extracted.title]]",
+      "elementHint": "TEXTAREA[#notesTextAreaID]",
+      "label": "Write a note in this area. It's really easy to share with ot",
+      "selector": "#notesTextAreaID",
+      "value": "[[extracted.title]]"
+    }
+  ],
+  "updatedAt": 1780854634393
+}

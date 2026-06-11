@@ -82,6 +82,10 @@
           <input type="text" id="template-name" placeholder="Name this workflow…" maxlength="80" />
           <button id="btn-save-template" class="btn-gradient">Save</button>
         </div>
+        <div class="save-meta-row">
+          <input type="url" id="template-start-url" placeholder="Start URL (optional)" />
+          <label class="save-meta-check"><input type="checkbox" id="template-requires-auth" /> Requires login</label>
+        </div>
       </div>
 
     </section>
@@ -116,6 +120,7 @@ E.g. Create a Jira ticket for PR-Agent deployment"
         </div>
 
         <div class="play-actions-row">
+          <button id="btn-preview-vars" class="btn-ghost btn-full" type="button">Preview AI variables</button>
           <button id="btn-execute" class="btn-gradient btn-full btn-execute">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             <span id="execute-label">Execute with AI</span>
@@ -126,6 +131,12 @@ E.g. Create a Jira ticket for PR-Agent deployment"
           </button>
         </div>
         <div id="play-status" class="status-msg hidden"></div>
+        <div id="play-run-report" class="run-report hidden" aria-live="polite"></div>
+      </div>
+
+      <div class="templates-toolbar">
+        <button id="btn-import-template" class="btn-ghost-sm" type="button">Import JSON</button>
+        <input type="file" id="import-template-file" accept="application/json,.json" hidden />
       </div>
 
       <!-- Template list -->
@@ -194,6 +205,17 @@ E.g. Create a Jira ticket for PR-Agent deployment"
         </div>
 
         <div class="form-group form-group-toggle">
+          <label for="ai-selector-recovery" class="toggle-label">
+            AI selector recovery
+            <span class="label-hint">(extra API calls when elements aren't found — uses many tokens)</span>
+          </label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="ai-selector-recovery" />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+
+        <div class="form-group form-group-toggle">
           <label for="dev-mode" class="toggle-label">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
             Dev Mode
@@ -231,6 +253,17 @@ E.g. Create a Jira ticket for PR-Agent deployment"
     </div>
   </div>
 
-  <script src="popup.js"></script>
+  <script src="popup/core.js"></script>
+  <script src="popup/utils.js"></script>
+  <script src="popup/tabs.js"></script>
+  <script src="popup/settings.js"></script>
+  <script src="popup/templates.js"></script>
+  <script src="popup/playback.js"></script>
+  <script src="popup/recording.js"></script>
+  <script src="popup/steps.js"></script>
+  <script src="popup/messages.js"></script>
+  <script src="popup/events.js"></script>
+  <script src="popup/init-bootstrap.js"></script>
+  <script src="popup/init-exports.js"></script>
 </body>
 </html>

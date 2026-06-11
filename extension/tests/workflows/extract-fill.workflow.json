@@ -1,0 +1,22 @@
+{
+  "id": "extract-fill-test",
+  "name": "Extract and Fill Test",
+  "description": "Extract text from page and type into another field",
+  "steps": [
+    {
+      "action": "extract",
+      "selector": "[data-testid=\"source-text\"]",
+      "variable": "message",
+      "extractType": "text",
+      "label": "Source text",
+      "description": "Source text"
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid=\"target-field\"]",
+      "value": "[[extracted.message]]",
+      "label": "Target field",
+      "description": "Target field"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "login-test",
+  "name": "Login Test",
+  "description": "E2E fixture workflow — type credentials and submit",
+  "steps": [
+    {
+      "action": "type",
+      "selector": "[data-testid=\"username\"]",
+      "value": "testuser",
+      "label": "Username",
+      "description": "Username"
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid=\"password\"]",
+      "value": "secret123",
+      "label": "Password",
+      "description": "Password"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"submit\"]",
+      "label": "Submit",
+      "description": "Submit"
+    }
+  ]
+}

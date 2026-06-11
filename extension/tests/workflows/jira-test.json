@@ -1,0 +1,72 @@
+{
+    "createdAt": 1780751539598,
+    "id": "e8ae0729-9035-4d85-a631-99b84604757d",
+    "name": "jira",
+    "steps": [
+      {
+        "action": "navigate",
+        "auto": true,
+        "description": "Navigate to https://yuriiai.atlassian.net/jira/for-you",
+        "label": "Navigate to https://yuriiai.atlassian.net/jira/for-you",
+        "value": "https://yuriiai.atlassian.net/jira/for-you"
+      },
+      {
+        "action": "click",
+        "description": "Create",
+        "elementHint": "SPAN",
+        "label": "Create",
+        "selector": "span._v564g17y._1reo15vq:nth-of-type(2)"
+      },
+      {
+        "action": "type",
+        "description": "Summary",
+        "elementHint": "INPUT[type=text][name=summary][#summary-field]",
+        "label": "Summary",
+        "selector": "#summary-field",
+        "suggestedVar": "summary",
+        "value": "{{subject}}"
+      },
+      {
+        "action": "type",
+        "description": "Description area, start typing to enter text.",
+        "elementHint": "DIV[#ak-editor-textarea][role=textbox][contenteditable]",
+        "isContentEditable": true,
+        "label": "Description area, start typing to enter text.",
+        "selector": "#ak-editor-textarea",
+        "suggestedVar": "descriptionAreaStartTypingToEnterText",
+        "value": "{{description}}"
+      },
+      {
+        "action": "click",
+        "description": "Assign to me",
+        "elementHint": "BUTTON",
+        "label": "Assign to me",
+        "selector": "[data-testid=\"issue-create-commons\\.ui\\.assignee-field\\.assing-to-me-button\"]"
+      },
+      {
+        "action": "click",
+        "description": "Select date",
+        "elementHint": "DIV",
+        "id": "b0ae7ca2-668b-422e-95e9-5ad8bfeb60ea",
+        "label": "Select date",
+        "selector": "div._19pkv47k._1rys187o:nth-of-type(5) > div._1pfhu2gc > div._1bsbqb4d._19pknek2 > div._kqswh2mm > div._11c81d4k._kqswh2mm:nth-of-type(1) > div._12ji1r31._1qu2glyw:nth-of-type(1) > div._16jlkb7n._1o9zkb7n:nth-of-type(1)",
+        "timestamp": 1780751674792
+      },
+      {
+        "action": "click",
+        "description": "8, Monday June 2026",
+        "id": "3da81a24-4f4b-4ab5-98f2-f2dea5c9367a",
+        "label": "8, Monday June 2026",
+        "selector": "[aria-label=\"\\38 \\,\\ Monday\\ June\\ 2026\"]",
+        "timestamp": 1780751677238
+      },
+      {
+        "action": "click",
+        "description": "Create",
+        "elementHint": "SPAN",
+        "label": "Create",
+        "selector": "button.css-1nmszez > span.css-178ag6o"
+      }
+    ],
+    "updatedAt": 1780751779149
+  }

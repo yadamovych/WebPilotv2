@@ -1,0 +1,27 @@
+{
+  "id": "variable-login-test",
+  "name": "Variable Login Test",
+  "description": "E2E workflow with AI-filled template variables",
+  "steps": [
+    {
+      "action": "type",
+      "selector": "[data-testid=\"username\"]",
+      "value": "{{username}}",
+      "label": "Username",
+      "description": "Username"
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid=\"password\"]",
+      "value": "{{password}}",
+      "label": "Password",
+      "description": "Password"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"submit\"]",
+      "label": "Submit",
+      "description": "Submit"
+    }
+  ]
+}

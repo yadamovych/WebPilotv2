@@ -5,7 +5,10 @@
 
 // Import centralized error tracking and safe utilities
 // eslint-disable-next-line no-undef
-importScripts('error-handler.js');
+importScripts('error-handler.js', 'lib/step-utils.js', 'lib/script-lists.js');
+
+// eslint-disable-next-line no-undef
+const CONTENT_SCRIPT_FILES = WebPilotScripts.CONTENT_SCRIPT_FILES;
 
 // ---------------------------------------------------------------------------
 // Open the side panel instead of a popup when the toolbar icon is clicked
@@ -70,6 +73,7 @@ const STATE = {
     active: false,
     tabId: null,
     currentIndex: 0,
+    runReport: null,
   },
 };
 
@@ -99,16 +103,13 @@ const DEFAULT_SERVER_URL = 'http://localhost:8000';
     }
   } catch (_) { /* storage.session unavailable on very old Chrome — ignore */ }
 
-  // Start periodic error reporting to backend
+  // Start periodic error reporting to backend (singleton — safe across SW restarts).
   try {
     const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
     const backendUrl = serverConfig.url || DEFAULT_SERVER_URL;
-    // eslint-disable-next-line no-undef, no-console
-    console.log('[WebPilot] Starting error reporter to:', backendUrl);
     // eslint-disable-next-line no-undef
-    startErrorReporting(backendUrl, 1); // Report every 1 minute for testing
+    startErrorReporting(backendUrl);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('[WebPilot] Error reporting setup failed:', err?.message || err);
   }
 })();
@@ -167,6 +168,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   case 'DELETE_TEMPLATE':
     handleDeleteTemplate(message.id).then(sendResponse).catch(err => sendResponse({ error: err.message }));
     break;
+  case 'EXPORT_TEMPLATE':
+    handleExportTemplate(message.id).then(sendResponse).catch(err => sendResponse({ error: err.message }));
+    break;
+  case 'IMPORT_TEMPLATE':
+    handleImportTemplate(message.template).then(sendResponse).catch(err => sendResponse({ error: err.message }));
+    break;
+  case 'PREVIEW_VARIABLES':
+    handlePreviewVariables(message.templateId, message.userRequest)
+      .then(sendResponse).catch(err => sendResponse({ error: err.message }));
+    break;
   case 'PLAY_TEMPLATE':
     handlePlayTemplate(message.templateId, message.userRequest, message.tabId)
       .then(sendResponse).catch(err => sendResponse({ error: err.message }));
@@ -206,11 +217,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true, errors, count: errors.length });
     }).catch(err => sendResponse({ success: false, error: err?.message || err }));
     break;
+  case 'TRACK_ERROR':
+    // Persist an error forwarded from a content script (which lacks storage
+    // permissions). The record is already in the content-script schema.
+    // eslint-disable-next-line no-undef
+    if (message.errorRecord) {
+      // eslint-disable-next-line no-undef
+      errorTracker.persistError(message.errorRecord);
+    }
+    sendResponse({ success: true });
+    break;
   case 'GET_SELECTOR_ALTERNATIVES':
-    // Get AI-powered selector alternatives from backend
+    // AI selector recovery is opt-in — it can burn tokens on every failed step/retry.
     (async () => {
       try {
         const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
+        if (serverConfig.aiSelectorRecovery !== true) {
+          sendResponse({ success: true, alternatives: [] });
+          return;
+        }
+
         const backendUrl = serverConfig.url || DEFAULT_SERVER_URL;
         // eslint-disable-next-line no-console
         console.log('[WebPilot] Requesting selector alternatives:', message.selector);
@@ -409,7 +435,15 @@ async function handleStopRecording() {
   } finally {
     STATE.recording = false;
     STATE.recordingTabId = null;
-    persistState();
+    // eslint-disable-next-line no-undef
+    if (typeof WebPilotStepUtils !== 'undefined') {
+      // eslint-disable-next-line no-undef
+      STATE.steps = WebPilotStepUtils.sanitizeRecordedSteps(STATE.steps);
+      persistState();
+      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch(() => {});
+    } else {
+      persistState();
+    }
   }
   return { success: true, steps: STATE.steps };
 }
@@ -426,6 +460,12 @@ function handleRecordAction(action, tabId, sendResponse) {
     const last = STATE.steps[STATE.steps.length - 1];
     const now = Date.now();
 
+    // eslint-disable-next-line no-undef
+    if (typeof WebPilotStepUtils !== 'undefined' && WebPilotStepUtils.shouldDropRecordedAction(action, last)) {
+      sendResponse({ success: true, dropped: true });
+      return;
+    }
+
     // For type actions on the same element, replace the last step instead of
     // appending — this way only the final typed value is recorded, not every
     // debounce snapshot.
@@ -441,11 +481,43 @@ function handleRecordAction(action, tabId, sendResponse) {
         id: last.id,          // keep stable ID
         timestamp: now,
       };
+      // eslint-disable-next-line no-undef
+      if (typeof WebPilotStepUtils !== 'undefined') {
+        // eslint-disable-next-line no-undef
+        STATE.steps = WebPilotStepUtils.sanitizeRecordedSteps(STATE.steps);
+      }
       persistState();
       chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch((err) => {
         console.warn('[WebPilot] Failed to notify steps updated:', err?.message || err);
       });
       sendResponse({ success: true });
+      return;
+    }
+
+    // Replace select on the same element with the latest chosen value.
+    if (
+      action.action === 'select' &&
+      last &&
+      last.action === 'select' &&
+      last.selector === action.selector
+    ) {
+      STATE.steps[STATE.steps.length - 1] = {
+        ...last,
+        ...action,
+        id: last.id,
+        timestamp: now,
+      };
+      persistState();
+      // eslint-disable-next-line no-undef
+      if (typeof WebPilotStepUtils !== 'undefined') {
+        // eslint-disable-next-line no-undef
+        STATE.steps = WebPilotStepUtils.sanitizeRecordedSteps(STATE.steps);
+        persistState();
+      }
+      chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch((err) => {
+        console.warn('[WebPilot] Failed to notify steps updated:', err?.message || err);
+      });
+      sendResponse({ success: true, updated: true });
       return;
     }
 
@@ -466,6 +538,11 @@ function handleRecordAction(action, tabId, sendResponse) {
       id: crypto.randomUUID(),
       timestamp: now,
     });
+    // eslint-disable-next-line no-undef
+    if (typeof WebPilotStepUtils !== 'undefined') {
+      // eslint-disable-next-line no-undef
+      STATE.steps = WebPilotStepUtils.sanitizeRecordedSteps(STATE.steps);
+    }
     persistState();
     chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch((err) => {
       console.warn('[WebPilot] Failed to notify steps updated:', err?.message || err);
@@ -479,9 +556,14 @@ function handleRecordAction(action, tabId, sendResponse) {
 // ---------------------------------------------------------------------------
 async function handleSaveTemplate(template) {
   try {
+    // eslint-disable-next-line no-undef
+    const steps = typeof WebPilotStepUtils !== 'undefined'
+      // eslint-disable-next-line no-undef
+      ? WebPilotStepUtils.sanitizeRecordedSteps(template.steps ?? [])
+      : (template.steps ?? []);
     const { templates = {} } = await chrome.storage.local.get('templates');
     const id = template.id ?? crypto.randomUUID();
-    templates[id] = { ...template, id, updatedAt: Date.now() };
+    templates[id] = { ...template, steps, id, updatedAt: Date.now() };
     await chrome.storage.local.set({ templates });
     return { success: true, id };
   } catch (err) {
@@ -507,6 +589,75 @@ async function handleDeleteTemplate(id) {
   } catch (err) {
     return { error: err.message };
   }
+}
+
+async function handleExportTemplate(id) {
+  try {
+    const { templates = {} } = await chrome.storage.local.get('templates');
+    const template = templates[id];
+    if (!template) {
+      throw new Error('Template not found');
+    }
+    return { success: true, template, json: JSON.stringify(template, null, 2) };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function handleImportTemplate(template) {
+  if (!template?.steps?.length) {
+    return { error: 'Invalid template: missing steps' };
+  }
+  return handleSaveTemplate({
+    ...template,
+    id: template.id ?? crypto.randomUUID(),
+    createdAt: template.createdAt ?? Date.now(),
+  });
+}
+
+async function handlePreviewVariables(templateId, userRequest) {
+  try {
+    const { templates = {} } = await chrome.storage.local.get('templates');
+    const template = templates[templateId];
+    if (!template) {
+      throw new Error('Template not found');
+    }
+    const variables = await fillTemplateVariables(template, userRequest ?? '');
+    return { success: true, variables };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function reportPlaybackToBackend(report) {
+  if (!report) {
+    return;
+  }
+  try {
+    const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
+    const backendUrl = serverConfig.url || DEFAULT_SERVER_URL;
+    await fetch(`${backendUrl}/api/playback-logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(report),
+    }).catch(() => {});
+  } catch (_) { /* optional telemetry */ }
+}
+
+function recordStepResult(report, index, step, outcome) {
+  if (!report) {
+    return;
+  }
+  report.steps.push({
+    index,
+    action: step.action,
+    description: step.description ?? step.label ?? '',
+    selector: step.selector ?? '',
+    status: outcome.success ? 'ok' : 'failed',
+    error: outcome.error ?? null,
+    selectorUsed: outcome.selectorUsed ?? step.selector ?? null,
+    retryAttempt: outcome.retryAttempt ?? null,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -577,20 +728,56 @@ async function handlePlayTemplate(templateId, userRequest, tabId) {
       await ensureContentScript(tabId);
     }
 
-    STATE.playback = { active: true, tabId, currentIndex: startIndex };
+    STATE.playback = {
+      active: true,
+      tabId,
+      currentIndex: startIndex,
+      runReport: {
+        templateId,
+        templateName: template.name,
+        startedAt: Date.now(),
+        steps: [],
+        success: false,
+        variables,
+      },
+    };
 
     const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
-    await executeSteps(tabId, resolvedSteps, !!serverConfig.devMode, startIndex);
+    await executeSteps(
+      tabId,
+      resolvedSteps,
+      !!serverConfig.devMode,
+      startIndex,
+      serverConfig.aiSelectorRecovery === true,
+    );
 
+    STATE.playback.runReport.success = true;
+    STATE.playback.runReport.finishedAt = Date.now();
+    await reportPlaybackToBackend(STATE.playback.runReport);
+    chrome.runtime.sendMessage({
+      type: 'PLAYBACK_COMPLETE',
+      report: STATE.playback.runReport,
+    }).catch(() => {});
     STATE.playback.active = false;
-    return { success: true, variables };
+    return { success: true, variables, report: STATE.playback.runReport };
   } catch (err) {
     STATE.playback.active = false;
-    return { error: err.message };
+    if (STATE.playback.runReport) {
+      STATE.playback.runReport.finishedAt = Date.now();
+      STATE.playback.runReport.error = err.message;
+      await reportPlaybackToBackend(STATE.playback.runReport);
+      chrome.runtime.sendMessage({
+        type: 'PLAYBACK_COMPLETE',
+        report: STATE.playback.runReport,
+      }).catch(() => {});
+    }
+    return { error: err.message, report: STATE.playback.runReport ?? null };
   }
 }
 
-async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
+async function executeSteps(tabId, steps, devMode = false, startIndex = 0, aiSelectorRecovery = false) {
+  const report = STATE.playback.runReport;
+
   for (let i = startIndex; i < steps.length; i++) {
     if (!STATE.playback.active) {
       break;
@@ -653,10 +840,14 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
 
       // Small settling delay for SPAs that render after the load event
       await delay(300);
+      recordStepResult(report, i, currentStep, { success: true });
     } else {
       // For non-navigate actions, send to content script with retries
       const MAX_RETRIES = 3;
       const RETRY_DELAY_MS = 1000;
+      // Record the URL before the action so we can detect navigations it triggers.
+      const tabBefore = await chrome.tabs.get(tabId).catch(() => null);
+      const urlBeforeStep = tabBefore?.url ?? '';
       let result;
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         // Execution logging removed - comment out if needed for debugging
@@ -668,6 +859,7 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
           total: steps.length,
           devMode,
           afterNavigate: attempt > 1 || (i > 0 && steps[i - 1].action === 'navigate'),
+          aiSelectorRecovery,
         }).catch(err => ({ error: err.message }));
         if (!result?.error) {
           break;
@@ -688,8 +880,19 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
       }
 
       if (result?.error) {
+        recordStepResult(report, i, currentStep, {
+          success: false,
+          error: result.error,
+          retryAttempt: MAX_RETRIES,
+        });
         throw new Error(`Step ${i + 1} failed after ${MAX_RETRIES} attempts: ${result.error}`);
       }
+
+      recordStepResult(report, i, currentStep, {
+        success: true,
+        selectorUsed: result?.selectorUsed ?? currentStep.selector,
+        retryAttempt: result?.retryAttempt ?? null,
+      });
 
       // If the step extracted a variable, persist it in session storage from the
       // background (trusted context) so later steps can resolve [[extracted.var]] reliably.
@@ -712,6 +915,17 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
         }
       }
 
+      // If the action may have triggered a navigation (e.g. clicking a link or
+      // submit button, or pressing Enter), wait for the page to settle before
+      // advancing — otherwise the next step runs against a half-loaded page.
+      if (currentStep.action === 'click' || currentStep.action === 'key') {
+        const navigated = await waitForPossibleNavigation(tabId, urlBeforeStep);
+        if (navigated) {
+          await ensureContentScript(tabId);
+          await delay(300);
+        }
+      }
+
       // Per-step delay (default 600 ms if not set)
       await delay(currentStep.delayMs ?? 600);
     }
@@ -721,6 +935,14 @@ async function executeSteps(tabId, steps, devMode = false, startIndex = 0) {
 // ---------------------------------------------------------------------------
 // AI variable resolution
 // ---------------------------------------------------------------------------
+const VARIABLE_FILL_CACHE_TTL_MS = 5 * 60 * 1000;
+const variableFillCache = new Map();
+
+function variableFillCacheKey(template, userRequest, needsAI) {
+  const id = template.id ?? template.name ?? 'unknown';
+  return `${id}|${userRequest}|${[...needsAI].sort().join(',')}`;
+}
+
 async function fillTemplateVariables(template, userRequest) {
   // Extract TEMPLATE VARIABLES: {{varName}} placeholders from all step values
   // These are for AI generation only.
@@ -773,30 +995,37 @@ async function fillTemplateVariables(template, userRequest) {
 
   let aiVariables = {};
   if (needsAI.length > 0) {
-    const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
-    const serverUrl = serverConfig.url ?? DEFAULT_SERVER_URL;
+    const cacheKey = variableFillCacheKey(template, userRequest, needsAI);
+    const cached = variableFillCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < VARIABLE_FILL_CACHE_TTL_MS) {
+      aiVariables = cached.variables;
+    } else {
+      const { serverConfig = {} } = await chrome.storage.local.get('serverConfig');
+      const serverUrl = serverConfig.url ?? DEFAULT_SERVER_URL;
 
-    const response = await fetch(`${serverUrl}/api/fill-template`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userRequest,
-        variables: needsAI,
-        templateName: template.name,
-        templateDescription: template.description ?? '',
-        backend: serverConfig.backend ?? 'groq',
-        apiKey: serverConfig.apiKey ?? '',
-        model: serverConfig.model ?? '',
-      }),
-    });
+      const response = await fetch(`${serverUrl}/api/fill-template`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userRequest,
+          variables: needsAI,
+          templateName: template.name,
+          templateDescription: template.description ?? '',
+          backend: serverConfig.backend ?? 'groq',
+          apiKey: serverConfig.apiKey ?? '',
+          model: serverConfig.model ?? '',
+        }),
+      });
 
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.detail ?? `Server error ${response.status}`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail ?? `Server error ${response.status}`);
+      }
+
+      const data = await response.json();
+      aiVariables = data.variables ?? {};
+      variableFillCache.set(cacheKey, { variables: aiVariables, at: Date.now() });
     }
-
-    const data = await response.json();
-    aiVariables = data.variables ?? {};
   }
 
   // Merge: extracted values take precedence over AI-generated ones.
@@ -892,8 +1121,32 @@ function waitForTabLoad(tabId, timeoutMs = 15000) {
 }
 
 /**
- * Ensure content.js is running in the given tab.
+ * After an action step (click/key), detect whether it triggered a navigation
+ * and, if so, wait for the new page to finish loading.
  *
+ * Detection: poll the tab briefly. If within ~1.2 s the tab enters the
+ * 'loading' state or its URL changes, treat it as a navigation and wait for
+ * status 'complete'. Returns true if a navigation was awaited, false otherwise.
+ */
+async function waitForPossibleNavigation(tabId, urlBefore, detectMs = 1200) {
+  const start = Date.now();
+  while (Date.now() - start < detectMs) {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (!tab) {
+      return false;
+    }
+    if (tab.status === 'loading' || (tab.url && tab.url !== urlBefore)) {
+      await waitForTabLoad(tabId);
+      await delay(300); // settling delay for SPAs that render after load
+      return true;
+    }
+    await delay(150);
+  }
+  return false;
+}
+
+/**
+ * Ensure content.js is running in the given tab.
  * Strategy:
  *  1. Ping the tab — if it responds, the content script is already alive.
  *  2. If ping times out or the port is closed, inject content.js via
@@ -935,7 +1188,7 @@ async function ensureContentScript(tabId) {
   // Inject the content script programmatically
   await chrome.scripting.executeScript({
     target: { tabId, allFrames: true },
-    files: ['content.js'],
+    files: CONTENT_SCRIPT_FILES,
   });
 
   // Give the script ~200 ms to initialise

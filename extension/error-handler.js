@@ -9,8 +9,12 @@ class ErrorTracker {
   constructor() {
     this.errors = [];
     this.maxErrors = 50;
-    this.isContentScript = typeof window !== 'undefined' && !chrome.runtime;
-    this.isSW = typeof chrome !== 'undefined' && chrome.runtime?.id;
+    const hasRuntime = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
+    const hasWindow = typeof window !== 'undefined';
+    // Service worker: extension runtime available, no DOM window.
+    this.isSW = hasRuntime && !hasWindow;
+    // Content script: extension runtime available AND a DOM window present.
+    this.isContentScript = hasRuntime && hasWindow;
   }
 
   /**
@@ -47,7 +51,7 @@ class ErrorTracker {
   }
 
   /**
-   * Persist errors to chrome.storage
+   * Persist errors to chrome.storage (SW) or forward to the SW (content script)
    */
   persistError(errorRecord) {
     try {
@@ -61,9 +65,19 @@ class ErrorTracker {
           }
           chrome.storage.local.set({ webpilot_errors: errors });
         });
+      } else if (this.isContentScript) {
+        // Content scripts lack storage permissions; forward the record to the
+        // service worker, which owns chrome.storage.local.
+        chrome.runtime.sendMessage(
+          { type: 'TRACK_ERROR', errorRecord },
+          () => {
+            // Swallow lastError (e.g. SW asleep); the in-memory log still holds it.
+            void chrome.runtime.lastError;
+          },
+        );
       }
     } catch (e) {
-      // Silently fail if storage unavailable
+      // Silently fail if storage/messaging unavailable
     }
   }
 
@@ -197,19 +211,29 @@ const safeStor = {
 /**
  * Report errors to backend (optional)
  */
+let errorReportIntervalId = null;
+let errorReportInFlight = false;
+
+function stopErrorReporting() {
+  if (errorReportIntervalId !== null) {
+    clearInterval(errorReportIntervalId);
+    errorReportIntervalId = null;
+  }
+}
+
 async function reportErrorsToBackend(backendUrl) {
+  if (errorReportInFlight) {
+    return { success: false, error: 'Report already in progress' };
+  }
+
+  errorReportInFlight = true;
   try {
     const report = await errorTracker.exportErrors();
 
     // Don't report if no errors
     if (report.errorCount === 0) {
-      // eslint-disable-next-line no-console
-      console.log('[WebPilot] No errors to report');
       return { success: true, message: 'No errors to report' };
     }
-
-    // eslint-disable-next-line no-console
-    console.log(`[WebPilot] Reporting ${report.errorCount} errors to ${backendUrl}/api/extension-errors`);
 
     const response = await fetch(`${backendUrl}/api/extension-errors`, {
       method: 'POST',
@@ -217,23 +241,20 @@ async function reportErrorsToBackend(backendUrl) {
       body: JSON.stringify(report),
     });
 
-    // eslint-disable-next-line no-console
-    console.log(`[WebPilot] Server responded with status ${response.status}`);
-
     if (!response.ok) {
       const text = await response.text();
       throw new Error(`HTTP ${response.status}: ${text}`);
     }
 
     await errorTracker.clearErrors();
-    // eslint-disable-next-line no-console
-    console.log(`[WebPilot] Successfully reported ${report.errorCount} errors`);
     return { success: true, message: `Reported ${report.errorCount} errors` };
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('[WebPilot] Error reporting failed:', error?.message || error);
-    errorTracker.track(error, { operation: 'report-to-backend' });
+    // Do not track reporting failures — that creates a feedback loop where each
+    // failed report adds another error and the queue never drains.
+    console.warn('[WebPilot] Error reporting failed:', error?.message || error);
     return { success: false, error: error?.message || String(error) };
+  } finally {
+    errorReportInFlight = false;
   }
 }
 
@@ -247,24 +268,13 @@ async function reportErrorsToBackend(backendUrl) {
  * Start periodic error reporting (call from background.js)
  */
 function startErrorReporting(backendUrl, intervalMinutes = 5) {
-  // eslint-disable-next-line no-console
-  console.log(`[WebPilot] Error reporting started (interval: ${intervalMinutes} min, backend: ${backendUrl})`);
+  stopErrorReporting();
 
-  // Report immediately if there are errors
-  reportErrorsToBackend(backendUrl).then((result) => {
-    if (!result.success) {
-      // eslint-disable-next-line no-console
-      console.warn('[WebPilot] Initial error report failed:', result.error);
-    }
-  });
+  // Report once on startup when there are queued errors.
+  reportErrorsToBackend(backendUrl).catch(() => {});
 
-  // Then schedule periodic reporting
-  setInterval(async () => {
-    const result = await reportErrorsToBackend(backendUrl);
-    if (!result.success) {
-      // eslint-disable-next-line no-console
-      console.warn('[WebPilot] Error report failed:', result.error);
-    }
+  errorReportIntervalId = setInterval(() => {
+    reportErrorsToBackend(backendUrl).catch(() => {});
   }, intervalMinutes * 60 * 1000);
 }
 
@@ -279,5 +289,6 @@ if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
     safeStor,
     reportErrorsToBackend,
     startErrorReporting,
+    stopErrorReporting,
   };
 }
