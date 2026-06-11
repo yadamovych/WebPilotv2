@@ -22,6 +22,7 @@
       'content/bootstrap.js',
     ],
     POPUP_SCRIPT_FILES: [
+      'lib/step-utils.js',
       'popup/core.js',
       'popup/utils.js',
       'popup/tabs.js',

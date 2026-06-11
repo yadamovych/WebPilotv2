@@ -138,6 +138,26 @@ test('sanitizeRecordedSteps collapses copart-style year dropdown recording', () 
   assert.strictEqual(out[4].selector, '#currentHigh');
 });
 
+test('labelToVarName shortens instructional placeholder labels', () => {
+  const utils = loadStepUtils();
+  assert.strictEqual(
+    utils.labelToVarName('Description area start typing to enter text'),
+    'description',
+  );
+  assert.strictEqual(utils.labelToVarName('Summary *'), 'summary');
+  assert.strictEqual(utils.labelToVarName('Issue Description'), 'issueDescription');
+});
+
+test('stepDescriptionForType omits template variable from description', () => {
+  const utils = loadStepUtils();
+  const desc = utils.stepDescriptionForType({
+    label: 'Description area start typing to enter text',
+    suggestedVar: 'description',
+  });
+  assert.strictEqual(desc, 'Type into "Description area"');
+  assert.ok(!desc.includes('{{'));
+});
+
 test('getStepSelectors prefers selectors array', () => {
   const utils = loadStepUtils();
   const selectors = ['#a', '[data-testid="b"]'];

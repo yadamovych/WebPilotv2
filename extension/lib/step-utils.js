@@ -36,6 +36,63 @@
     return hint.startsWith('SELECT');
   }
 
+  const INSTRUCTIONAL_LABEL_RE = /\b(start typing|click to (enter|edit|type)|enter text|type here|please enter)\b/i;
+  const VAR_STOP_WORDS = new Set([
+    'start', 'typing', 'to', 'enter', 'text', 'click', 'here', 'type', 'your', 'the',
+    'a', 'an', 'please', 'optional', 'required', 'area',
+  ]);
+
+  function isInstructionalLabel(label) {
+    if (!label || typeof label !== 'string') {
+      return false;
+    }
+    const trimmed = label.trim();
+    return INSTRUCTIONAL_LABEL_RE.test(trimmed) || trimmed.length > 45;
+  }
+
+  function simplifyLabelText(label) {
+    if (!label) {
+      return '';
+    }
+    let text = label.trim().replace(/\s+/g, ' ');
+    text = text.replace(
+      /\b(start typing to enter text|click to enter|enter text here|type here|start typing)\b/gi,
+      '',
+    );
+    return text.replace(/[*:]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function labelToVarName(label) {
+    const simplified = simplifyLabelText(label);
+    const words = simplified
+      .replace(/[^a-zA-Z0-9 ]/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter((w) => !VAR_STOP_WORDS.has(w.toLowerCase()));
+
+    if (words.length === 0) {
+      return 'value';
+    }
+    if (words.length === 1 || label.length > 28 || words.length > 2) {
+      return words[0].toLowerCase();
+    }
+    return words
+      .slice(0, 2)
+      .map((w, i) => (i === 0 ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase()))
+      .join('');
+  }
+
+  function shortStepLabel(step) {
+    const raw = step?.label ?? step?.description ?? step?.selector ?? 'field';
+    const simplified = simplifyLabelText(String(raw));
+    return simplified.slice(0, 40) || 'field';
+  }
+
+  function stepDescriptionForType(step) {
+    return `Type into "${shortStepLabel(step)}"`;
+  }
+
   function normalizeTemplateVariable(step) {
     if (step.action !== 'type' || !step.suggestedVar) {
       return step;
@@ -47,9 +104,7 @@
       return {
         ...step,
         value: `{{${varName}}}`,
-        description: step.description?.includes('{{')
-          ? step.description.replace(/\{\{\w+\}\}/, `{{${varName}}}`)
-          : `Type {{${varName}}} into "${step.label ?? step.selector ?? 'field'}"`,
+        description: stepDescriptionForType(step),
       };
     }
     return step;
@@ -153,5 +208,10 @@
     isNativeSelectStep,
     shouldDropRecordedAction,
     normalizeTemplateVariable,
+    isInstructionalLabel,
+    simplifyLabelText,
+    labelToVarName,
+    shortStepLabel,
+    stepDescriptionForType,
   };
 })(typeof self !== 'undefined' ? self : globalThis);

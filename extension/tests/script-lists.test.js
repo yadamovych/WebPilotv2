@@ -37,6 +37,7 @@ test('popup.html scripts match POPUP_SCRIPT_FILES', () => {
   const { POPUP_SCRIPT_FILES } = loadScriptLists();
   const popupScripts = scriptSrcsFromHtml(path.join(EXT, 'popup.html'));
   assert.deepEqual([...popupScripts], [...POPUP_SCRIPT_FILES]);
+  assert.equal(popupScripts[0], 'lib/step-utils.js');
 });
 
 test('sidepanel.html loads POPUP_SCRIPT_FILES before sidepanel.js', () => {

@@ -242,14 +242,13 @@
       ? (el.textContent ?? '')
       : (el.value ?? '');
     const label = WP.getLabel(el) || WP.labelFromSelector(selector);
-    // Derive a {{variableName}} suggestion from the field label
     const suggestedVar = WP.labelToVarName(label);
     WP.recordAction(el, {
       action: 'type',
       selector,
       value,
-      label,
-      description: label,
+      label: WebPilotStepUtils.simplifyLabelText(label) || label,
+      description: WebPilotStepUtils.shortStepLabel({ label }),
       suggestedVar,
       elementHint: WP.elementHint(el),
       isContentEditable: el.isContentEditable || undefined,
@@ -326,20 +325,6 @@
       attrs.push('contenteditable');
     }
     return attrs.length ? `${tag}[${attrs.join('][')}]` : tag;
-  };
-
-  /**
-     * Convert a human-readable field label into a camelCase variable name.
-     * E.g. "Summary *" → "summary", "Issue Description" → "issueDescription"
-     */
-  WP.labelToVarName = function(label) {
-    return label
-      .replace(/[^a-zA-Z0-9 ]/g, '')   // strip special chars / asterisks
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((w, i) => i === 0 ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase())
-      .join('') || 'value';
   };
 
   WP.onInput = function(e) {
@@ -556,8 +541,10 @@
         const label       = WP.getLabel(targetEl) || WP.labelFromSelector(selector);
         WP.safeSend({
           type: 'RECORD_ACTION',
-          action: { action: 'extract', selector, variable: varName, extractType, label,
-            description: `Extract ${extractType} → {{${varName}}}`,
+          action: {
+            action: 'extract', selector, variable: varName, extractType,
+            label: WebPilotStepUtils.simplifyLabelText(label) || label,
+            description: `Extract ${extractType} from "${WebPilotStepUtils.shortStepLabel({ label })}"`,
             elementHint: WP.elementHint(targetEl) },
         });
         WP.flashRecorded(targetEl);
@@ -581,8 +568,10 @@
           const label    = WP.getLabel(targetEl) || WP.labelFromSelector(selector);
           WP.safeSend({
             type: 'RECORD_ACTION',
-            action: { action: 'type', selector, value: `[[extracted.${varName}]]`, label,
-              description: `Fill with [[extracted.${varName}]]`,
+            action: {
+              action: 'type', selector, value: `[[extracted.${varName}]]`,
+              label: WebPilotStepUtils.simplifyLabelText(label) || label,
+              description: `Fill "${WebPilotStepUtils.shortStepLabel({ label })}"`,
               elementHint: WP.elementHint(targetEl) },
           });
           WP.flashRecorded(targetEl);

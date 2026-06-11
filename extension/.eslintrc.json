@@ -17,7 +17,9 @@
     "safeChrome": "writable",
     "sendMessageSafe": "writable",
     "safeStor": "writable",
-    "reportErrorsToBackend": "writable"
+    "reportErrorsToBackend": "writable",
+    "WebPilotStepUtils": "readonly",
+    "WebPilotScripts": "readonly"
   },
   "rules": {
     "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],

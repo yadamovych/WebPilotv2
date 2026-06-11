@@ -96,9 +96,9 @@
         action: 'type',
         selector,
         value,
-        label,
+        label: WebPilotStepUtils.simplifyLabelText(label) || label,
         fieldType: 'date',
-        description: label,
+        description: WebPilotStepUtils.shortStepLabel({ label }),
         suggestedVar,
         elementHint: WP.elementHint(el),
       },
@@ -274,13 +274,22 @@
     if (title) {
       return title;
     }
-    const placeholder = el.getAttribute('placeholder')?.trim();
-    if (placeholder) {
-      return placeholder;
-    }
     const name        = el.getAttribute('name')?.trim();
     if (name) {
-      return name;
+      return name.replace(/[-_]+/g, ' ');
+    }
+    if (el.id) {
+      const idLabel = el.id
+        .replace(/[-_]+/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .trim();
+      if (idLabel && !WebPilotStepUtils.isInstructionalLabel(idLabel)) {
+        return idLabel.slice(0, 60);
+      }
+    }
+    const placeholder = el.getAttribute('placeholder')?.trim();
+    if (placeholder && !WebPilotStepUtils.isInstructionalLabel(placeholder)) {
+      return placeholder;
     }
 
     // 6. Element's own visible text (buttons, links, etc.)
@@ -314,29 +323,12 @@
     if (!label) {
       return 'extracted_value';
     }
+    const varName = WebPilotStepUtils.labelToVarName(label);
+    return varName && varName !== 'value' ? varName : 'extracted_value';
+  };
 
-    // Convert to snake_case:
-    // 1. Lowercase
-    // 2. Replace spaces and hyphens with underscores
-    // 3. Remove any other special characters
-    // 4. Collapse multiple underscores
-    let varName = label
-      .toLowerCase()
-      .trim()
-      .slice(0, 40)  // Limit length
-      .replace(/\s+/g, '_')  // Spaces to underscores
-      .replace(/-+/g, '_')   // Hyphens to underscores
-      .replace(/[^a-z0-9_]/g, '')  // Remove non-alphanumeric/underscore
-      .replace(/_+/g, '_')   // Collapse multiple underscores
-      .replace(/^_+|_+$/g, '')  // Remove leading/trailing underscores
-      .replace(/^[0-9]/, '');  // Remove leading digits
-
-    // Ensure it's not empty and doesn't start with number
-    if (!varName || /^\d/.test(varName)) {
-      varName = 'extracted_value';
-    }
-
-    return varName;
+  WP.labelToVarName = function(label) {
+    return WebPilotStepUtils.labelToVarName(label);
   };
 
   /**

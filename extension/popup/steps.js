@@ -62,7 +62,7 @@
     // Accept variable suggestion
     li.querySelector('.var-suggest-btn')?.addEventListener('click', () => {
       WP.state.steps[index].value = `{{${varName}}}`;
-      WP.state.steps[index].description = `Type {{${varName}}} into "${step.label ?? step.selector}"`;
+      WP.state.steps[index].description = WebPilotStepUtils.stepDescriptionForType(step);
       WP.renderSteps();
       // Persist to background
       WP.sendMsgSafe({ type: 'UPDATE_STEPS', steps: WP.state.steps });
