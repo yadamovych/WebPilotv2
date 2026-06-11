@@ -41,6 +41,7 @@ def _check_rate_limit(client_id: str) -> None:
     bucket.append(now)
     _rate_buckets[client_id] = bucket
 
+
 app = FastAPI(
     title="WebPilot AI Server",
     version="1.0.0",
