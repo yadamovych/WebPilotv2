@@ -37,6 +37,17 @@
   },
   "overrides": [
     {
+      "files": ["scripts/**/*.js"],
+      "env": {
+        "node": true,
+        "browser": false,
+        "webextensions": false
+      },
+      "parserOptions": {
+        "sourceType": "script"
+      }
+    },
+    {
       "files": ["tests/**/*.js"],
       "env": {
         "node": true,

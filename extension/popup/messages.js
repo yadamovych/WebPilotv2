@@ -39,5 +39,5 @@
       }
       WP.dom.executeLabel.textContent = '▶ Execute with AI';
     }
-  }
+  };
 })(window.WebPilotPopup);

@@ -84,7 +84,7 @@
     for (const raw of steps) {
       const step = normalizeTemplateVariable(raw);
 
-      if (step.action === 'type' && (step.value === '' || step.value == null)) {
+      if (step.action === 'type' && (step.value === '' || step.value === null || step.value === undefined)) {
         continue;
       }
       if (step.action === 'type' && isNativeSelectStep(step)) {

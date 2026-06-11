@@ -3,6 +3,13 @@ extension/test-results/
 extension/playwright-report/
 extension/tests/.auth/
 
+# Playwright npm packages (install via package-lock + npm ci)
+extension/node_modules/playwright/
+extension/node_modules/playwright-core/
+extension/node_modules/@playwright/
+extension/node_modules/.bin/playwright
+extension/node_modules/.bin/playwright-core
+
 # Python
 __pycache__/
 *.pyc

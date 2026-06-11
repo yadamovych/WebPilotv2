@@ -70,12 +70,12 @@
     }
 
     WP.dom.userRequest.focus();
-  }
+  };
 
   WP.closePlayPanel = function() {
     WP.dom.playPanel.classList.add('hidden');
     WP.state.selectedTemplateId = null;
-  }
+  };
 
   WP.previewVariables = async function() {
     if (!WP.state.selectedTemplateId) {
@@ -111,7 +111,7 @@
     } finally {
       WP.dom.btnPreviewVars.disabled = false;
     }
-  }
+  };
 
   WP.importTemplateFromFile = async function(ev) {
     const file = ev.target.files?.[0];
@@ -136,7 +136,7 @@
     } finally {
       ev.target.value = '';
     }
-  }
+  };
 
   WP.showRunReport = function(report) {
     if (!WP.dom.playRunReport || !report) {
@@ -158,7 +158,7 @@
     WP.dom.playRunReport.textContent = lines.join('\n');
     WP.dom.playRunReport.className = `run-report ${report.success && !report.error ? 'success' : 'error'}`;
     WP.dom.playRunReport.classList.remove('hidden');
-  }
+  };
 
   WP.executeTemplate = async function() {
     if (!WP.state.selectedTemplateId) {
@@ -217,7 +217,7 @@
       WP.dom.executeLabel.textContent = '▶ Execute with AI';
     }
 
-  }
+  };
 
   WP.stopPlayback = async function() {
     if (WP.dom.btnStop) {
@@ -230,7 +230,7 @@
     }
     WP.dom.btnExecute.disabled = false;
     WP.dom.executeLabel.textContent = '▶ Execute with AI';
-  }
+  };
 
   WP.deleteTemplate = async function(id) {
     await WP.sendMsg({ type: 'DELETE_TEMPLATE', id });
@@ -239,6 +239,6 @@
       WP.closePlayPanel();
     }
     WP.renderTemplates();
-  }
+  };
 
 })(window.WebPilotPopup);

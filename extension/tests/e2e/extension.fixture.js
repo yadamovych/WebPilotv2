@@ -21,7 +21,7 @@ function resolveUserDataDir() {
 }
 
 const test = base.extend({
-  context: async ({}, use) => {
+  context: async (_fixtures, use) => {
     const userDataDir = resolveUserDataDir();
     const context = await chromium.launchPersistentContext(userDataDir, {
       headless: false,

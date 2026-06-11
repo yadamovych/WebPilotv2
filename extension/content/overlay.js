@@ -4,43 +4,43 @@
   if (window.__webpilotSkipModules) {
     return;
   }
-    WP.mountOverlay = function(label = 'WebPilot · Recording') {
-      if (WP.state.overlayRoot) {
-        // Update label if already mounted
-        const badge = document.getElementById('webpilot-badge');
-        if (badge) {
-          badge.querySelector('span:last-child').textContent = label;
-        }
-        return;
+  WP.mountOverlay = function(label = 'WebPilot · Recording') {
+    if (WP.state.overlayRoot) {
+      // Update label if already mounted
+      const badge = document.getElementById('webpilot-badge');
+      if (badge) {
+        badge.querySelector('span:last-child').textContent = label;
       }
+      return;
+    }
 
-      WP.injectStyles();
+    WP.injectStyles();
 
-      WP.state.overlayRoot = document.createElement('div');
-      WP.state.overlayRoot.id = 'webpilot-overlay';
+    WP.state.overlayRoot = document.createElement('div');
+    WP.state.overlayRoot.id = 'webpilot-overlay';
 
-      const badge = document.createElement('div');
-      badge.id = 'webpilot-badge';
-      badge.innerHTML =
+    const badge = document.createElement('div');
+    badge.id = 'webpilot-badge';
+    badge.innerHTML =
         '<span class="wp-dot"></span><span>WebPilot · Recording</span>';
 
-      WP.state.overlayRoot.appendChild(badge);
-      document.documentElement.appendChild(WP.state.overlayRoot);
-    }
+    WP.state.overlayRoot.appendChild(badge);
+    document.documentElement.appendChild(WP.state.overlayRoot);
+  };
 
-    WP.unmountOverlay = function() {
-      WP.state.overlayRoot?.remove();
-      WP.state.overlayRoot = null;
-      WP.clearHighlight();
-    }
+  WP.unmountOverlay = function() {
+    WP.state.overlayRoot?.remove();
+    WP.state.overlayRoot = null;
+    WP.clearHighlight();
+  };
 
-    WP.injectStyles = function() {
-      if (document.getElementById('webpilot-styles')) {
-        return;
-      }
-      const style = document.createElement('style');
-      style.id = 'webpilot-styles';
-      style.textContent = `
+  WP.injectStyles = function() {
+    if (document.getElementById('webpilot-styles')) {
+      return;
+    }
+    const style = document.createElement('style');
+    style.id = 'webpilot-styles';
+    style.textContent = `
         #webpilot-overlay {
           position: fixed; inset: 0;
           z-index: 2147483646;
@@ -240,25 +240,25 @@
         }
 
       `;
-      document.head.appendChild(style);
-    }
+    document.head.appendChild(style);
+  };
 
-    WP.setHoverHighlight = function(el) {
-      WP.clearHighlight();
-      if (el && el !== WP.state.overlayRoot && !WP.state.overlayRoot?.contains(el)) {
-        WP.state.hoveredEl = el;
-        el.classList.add('wp-hover');
-      }
+  WP.setHoverHighlight = function(el) {
+    WP.clearHighlight();
+    if (el && el !== WP.state.overlayRoot && !WP.state.overlayRoot?.contains(el)) {
+      WP.state.hoveredEl = el;
+      el.classList.add('wp-hover');
     }
+  };
 
-    WP.clearHighlight = function() {
-      WP.state.hoveredEl?.classList.remove('wp-hover');
-      WP.state.hoveredEl = null;
-    }
+  WP.clearHighlight = function() {
+    WP.state.hoveredEl?.classList.remove('wp-hover');
+    WP.state.hoveredEl = null;
+  };
 
-    WP.flashRecorded = function(el) {
-      el.classList.remove('wp-hover');
-      el.classList.add('wp-recorded');
-      setTimeout(() => el.classList.remove('wp-recorded'), 600);
-    }
+  WP.flashRecorded = function(el) {
+    el.classList.remove('wp-hover');
+    el.classList.add('wp-recorded');
+    setTimeout(() => el.classList.remove('wp-recorded'), 600);
+  };
 })(window.WebPilotContent);

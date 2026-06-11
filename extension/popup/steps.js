@@ -11,7 +11,7 @@
     WP.dom.emptyRecord.classList.toggle('hidden', hasSteps);
     WP.dom.stepsList.innerHTML = '';
     WP.state.steps.forEach((step, i) => WP.dom.stepsList.appendChild(WP.buildStepItem(step, i)));
-  }
+  };
 
   WP.buildStepItem = function(step, index) {
     const li = document.createElement('li');
@@ -103,7 +103,7 @@
     });
 
     return li;
-  }
+  };
 
   WP.editStep = function(index, liEl) {
     const step = WP.state.steps[index];
@@ -245,7 +245,7 @@
         form.remove();
       }
     });
-  }
+  };
 
   // ---------------------------------------------------------------------------
   // Save template
@@ -304,5 +304,5 @@
       WP.renderTemplates();
       WP.switchTab('templates');
     }
-  }
+  };
 })(window.WebPilotPopup);

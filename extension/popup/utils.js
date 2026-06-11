@@ -13,7 +13,7 @@
     } catch (_) {
       return Promise.resolve(null);
     }
-  }
+  };
 
   /** Fire-and-forget send — swallows context-invalidated errors. */
   WP.sendMsgSafe = function(msg) {
@@ -23,13 +23,13 @@
     try {
       chrome.runtime.sendMessage(msg).catch(() => {});
     } catch (_) {}
-  }
+  };
 
   WP.esc = function(str) {
     const d = document.createElement('div');
     d.textContent = str ?? '';
     return d.innerHTML;
-  }
+  };
 
   /**
    * Return a compact, human-readable representation of a CSS selector for the
@@ -61,17 +61,17 @@
     // last segment of a descendant path
     const last = sel.split('>').pop().trim();
     return last.length <= 42 ? last : last.slice(0, 39) + '…';
-  }
+  };
 
   WP.setStatus = function(el, text, cls) {
     el.textContent = text;
     el.className = `status-msg${cls ? ' ' + cls : ''}`;
-  }
+  };
 
   WP.showStatus = function(el, text, success) {
     WP.setStatus(el, text, success ? 'success' : 'error');
     setTimeout(() => {
       el.className = 'status-msg hidden';
     }, 3000);
-  }
+  };
 })(window.WebPilotPopup);
