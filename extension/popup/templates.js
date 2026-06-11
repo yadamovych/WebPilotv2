@@ -7,7 +7,7 @@
   WP.loadTemplates = async function() {
     const res = await WP.sendMsg({ type: 'GET_TEMPLATES' });
     WP.state.templates = res?.templates ?? {};
-  }
+  };
 
   WP.renderTemplates = function() {
     const list = Object.values(WP.state.templates).sort(
@@ -20,7 +20,7 @@
     for (const tpl of list) {
       WP.dom.templatesList.appendChild(WP.buildTemplateItem(tpl));
     }
-  }
+  };
 
   WP.buildTemplateItem = function(tpl) {
     const li = document.createElement('li');
@@ -62,7 +62,7 @@
     li.querySelector('.btn-json-tpl')?.addEventListener('click', () => WP.openJsonModal(tpl));
     li.querySelector('.btn-danger').addEventListener('click', (e) => WP.confirmDeleteTemplate(tpl.id, e.currentTarget));
     return li;
-  }
+  };
 
   // ---------------------------------------------------------------------------
   // JSON modal
@@ -119,7 +119,7 @@
       await WP.saveEditedTemplate(parsed);
       close();
     };
-  }
+  };
 
   // ---------------------------------------------------------------------------
   // Inline template editor
@@ -131,7 +131,7 @@
     }
     li.classList.add('editing');
     WP.openTemplateEditor(tpl, li);
-  }
+  };
 
   WP.openTemplateEditor = function(tpl, li) {
     // Work on a deep copy so cancelling discards changes
@@ -358,7 +358,7 @@
     li.appendChild(editor);
     renderEditorSteps();
     editor.querySelector('.tpl-name-input').focus();
-  }
+  };
 
   WP.buildEditorStep = function(step, index, draft, refresh) {
     const li = document.createElement('li');
@@ -397,8 +397,8 @@
           <div class="tpl-val-row">
             <input class="tpl-step-val" type="text" value="${WP.esc(step.value ?? '')}" placeholder="${isDate ? 'Date value or {{template}} or [[extracted.var]] (e.g. YYYY-MM-DD)' : 'Value ({{template}} for AI or [[extracted.var]] for extraction)'}" />
             ${varName && !alreadyVar
-      ? `<button class="var-suggest-btn tpl-var-btn" data-var="${WP.esc(varName)}">{{${WP.esc(varName)}}}</button>`
-      : ''}
+    ? `<button class="var-suggest-btn tpl-var-btn" data-var="${WP.esc(varName)}">{{${WP.esc(varName)}}}</button>`
+    : ''}
           </div>
         ` : ''}
         ${isSelect ? `
@@ -604,7 +604,7 @@
     });
 
     return li;
-  }
+  };
 
   WP.saveEditedTemplate = async function(tpl) {
     const updated = { ...tpl, updatedAt: Date.now() };
@@ -613,5 +613,5 @@
       WP.state.templates[updated.id] = updated;
       WP.renderTemplates();
     }
-  }
+  };
 })(window.WebPilotPopup);

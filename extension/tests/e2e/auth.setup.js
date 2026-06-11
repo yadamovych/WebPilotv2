@@ -57,7 +57,7 @@ async function main() {
   await waitForEnter('Press Enter when login is complete… ');
 
   await context.close();
-  process.stdout.write(`\nAuth profile saved. Run workflows with:\n  npm run test:e2e:workflow -- your-jira.workflow.json\n\n`);
+  process.stdout.write('\nAuth profile saved. Run workflows with:\n  npm run test:e2e:workflow -- your-jira.workflow.json\n\n');
 }
 
 main().catch((err) => {

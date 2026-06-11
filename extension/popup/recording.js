@@ -15,11 +15,11 @@
       WP.applyRecordingUI();
       WP.renderSteps();
     } catch (_) { /* popup opened before background ready */ }
-  }
+  };
 
   WP.toggleRecording = async function() {
     WP.state.recording ? await WP.stopRecording() : await WP.startRecording();
-  }
+  };
 
   WP.startRecording = async function() {
     try {
@@ -33,7 +33,7 @@
     } catch (err) {
       WP.showStatus(WP.dom.recordError, err.message, false);
     }
-  }
+  };
 
   WP.stopRecording = async function() {
     const res = await WP.sendMsg({ type: 'STOP_RECORDING' });
@@ -45,12 +45,12 @@
     }
     WP.applyRecordingUI();
     WP.renderSteps();
-  }
+  };
 
   WP.applyRecordingUI = function() {
     const rec = WP.state.recording;
     WP.dom.btnRecord.classList.toggle('recording', rec);
     WP.dom.recordLabel.textContent = rec ? '⏹ Stop Recording' : 'Record Step';
     WP.dom.recordingStatus.classList.toggle('hidden', !rec);
-  }
+  };
 })(window.WebPilotPopup);

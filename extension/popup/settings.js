@@ -18,11 +18,11 @@
     WP.dom.aiSelectorRecovery.checked = serverConfig.aiSelectorRecovery === true;
     WP.state.devMode = WP.dom.devMode.checked;
     WP.refreshApiKeyVisibility();
-  }
+  };
 
   WP.refreshApiKeyVisibility = function() {
     WP.dom.apiKeyGroup.classList.toggle('hidden', WP.dom.backendSelect.value === 'vllm');
-  }
+  };
 
   WP.saveSettings = async function() {
     const config = {
@@ -40,7 +40,7 @@
       WP.checkServerHealth();
     }
     WP.showStatus(WP.dom.settingsStatus, res?.success ? 'Settings saved.' : 'Save failed.', !!res?.success);
-  }
+  };
 
   // ---------------------------------------------------------------------------
   // Server health check
@@ -76,5 +76,5 @@
         WP.showStatus(WP.dom.settingsStatus, `Cannot reach server at ${url}`, false);
       }
     }
-  }
+  };
 })(window.WebPilotPopup);
