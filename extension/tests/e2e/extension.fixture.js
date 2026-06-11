@@ -21,7 +21,9 @@ function resolveUserDataDir() {
 }
 
 const test = base.extend({
-  context: async (_fixtures, use) => {
+  // Playwright requires object destructuring even when no base fixtures are used.
+  // eslint-disable-next-line no-empty-pattern
+  context: async ({}, use) => {
     const userDataDir = resolveUserDataDir();
     const context = await chromium.launchPersistentContext(userDataDir, {
       headless: false,
