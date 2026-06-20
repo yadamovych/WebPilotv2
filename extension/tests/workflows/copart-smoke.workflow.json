@@ -1,0 +1,41 @@
+{
+  "name": "copart-smoke",
+  "steps": [
+    {
+      "action": "navigate",
+      "value": "https://www.copart.com/",
+      "label": "Navigate to https://www.copart.com/",
+      "description": "Navigate to https://www.copart.com/",
+      "auto": true,
+      "selectorQuality": "unknown"
+    },
+    {
+      "action": "type",
+      "selector": "#input-search",
+      "value": "honda",
+      "label": "Search inventory",
+      "description": "Search inventory",
+      "suggestedVar": "searchInventory",
+      "elementHint": "INPUT[type=text][#input-search]",
+      "selectors": [
+        "#input-search",
+        "[aria-label=\"Search\\ inventory\"]"
+      ],
+      "selectorQuality": "stable"
+    },
+    {
+      "action": "click",
+      "selector": "[aria-label=\"Search\\ inventory\"]",
+      "label": "Search inventory",
+      "description": "Search inventory",
+      "elementHint": "BUTTON[role=button]",
+      "selectors": [
+        "[aria-label=\"Search\\ inventory\"]"
+      ],
+      "selectorQuality": "good"
+    }
+  ],
+  "createdAt": 1781975046177,
+  "id": "c83724a0-ef22-482e-9e89-f9569e93cbee",
+  "updatedAt": 1781975071070
+}
