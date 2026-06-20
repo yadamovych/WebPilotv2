@@ -4,6 +4,8 @@
   if (window.__webpilotSkipModules) {
     return;
   }
+  // Debounce window for coalescing keystrokes into a single 'type' step.
+  const INPUT_DEBOUNCE_MS = 700;
   // ---------------------------------------------------------------------------
   // Event listeners
   // ---------------------------------------------------------------------------
@@ -145,10 +147,7 @@
         } else {
           // Fallback: record as a plain click
           const name = label || WP.labelFromSelector(selector);
-          WP.safeSend({
-            type: 'RECORD_ACTION',
-            action: { action: 'click', selector, label: name, description: name },
-          });
+          WP.recordAction(el, { action: 'click', selector, label: name, description: name });
         }
       }, 100);
       return;
@@ -198,23 +197,20 @@
             '';
           // Cancel any pending debounced type step for this combobox so we don't
           // get both a 'type' step (from user filtering) and a 'select' step.
-        const existingTimer = WP.state.inputTimers.get(sel);
+        const existingTimer = WP.state.inputTimers.get(targetEl);
         if (existingTimer) {
           clearTimeout(existingTimer.tid);
-          WP.state.inputTimers.delete(sel);
+          WP.state.inputTimers.delete(targetEl);
         }
         const lbl = WP.getLabel(targetEl) || WP.labelFromSelector(sel);
         WP.flashRecorded(optionEl);
-        WP.safeSend({
-          type: 'RECORD_ACTION',
-          action: {
-            action: 'select',
-            selector: sel,
-            value: optionText,
-            label: lbl,
-            description: `Select "${optionText}" in ${lbl}`,
-            elementHint: WP.elementHint(targetEl),
-          },
+        WP.recordAction(targetEl, {
+          action: 'select',
+          selector: sel,
+          value: optionText,
+          label: lbl,
+          description: `Select "${optionText}" in ${lbl}`,
+          elementHint: WP.elementHint(targetEl),
         });
         return;
       }
@@ -236,6 +232,11 @@
     }
     if (el.type === 'checkbox' || el.type === 'radio') {
       return;
+    }
+    // Compute the selector lazily so it reflects the DOM at flush time (and is
+    // computed once per field rather than on every keystroke).
+    if (!selector) {
+      selector = WP.buildSelector(el);
     }
     // For contenteditable elements use textContent; for inputs use .value
     const value = el.isContentEditable
@@ -281,13 +282,20 @@
         }
       }
 
-      // Apply the resolved value to the element
-      if (el.isContentEditable) {
-        el.textContent = resolvedValue;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-      } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-        el.value = resolvedValue;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
+      // Apply the resolved value to the element. Guard against re-entrancy: the
+      // synthetic 'input' event below would otherwise re-trigger WP.onInput and
+      // record the resolved literal in place of the [[extracted.x]] template.
+      WP.state.previewApplying = true;
+      try {
+        if (el.isContentEditable) {
+          el.textContent = resolvedValue;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+          el.value = resolvedValue;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      } finally {
+        WP.state.previewApplying = false;
       }
 
       // eslint-disable-next-line no-console
@@ -346,6 +354,10 @@
     if (!WP.state.isRecording || WP.isWebPilotEl(e.target)) {
       return;
     }
+    // Ignore synthetic input events from our own extracted-variable preview write.
+    if (WP.state.previewApplying) {
+      return;
+    }
     // Native date fields emit 'change' (not 'input') when picked — skip here to avoid duplicates
     if (WP.isDateField(e.target)) {
       return;
@@ -360,19 +372,22 @@
     if (el.tagName === 'SELECT' || el.closest?.('select')) {
       return;
     }
-    const selector = WP.buildSelector(el);
 
-    const existing = WP.state.inputTimers.get(selector);
+    // Key the debounce timer by the element itself (not its CSS selector). This
+    // avoids both recomputing the selector on every keystroke and the risk of
+    // emitting two 'type' steps if the element's selector changes mid-typing.
+    // The selector is computed lazily when the timer fires (see sendInputAction).
+    const existing = WP.state.inputTimers.get(el);
     if (existing) {
       clearTimeout(existing.tid);
     }
 
     const tid = setTimeout(() => {
-      WP.state.inputTimers.delete(selector);
-      WP.sendInputAction(el, selector);
-    }, 700);
+      WP.state.inputTimers.delete(el);
+      WP.sendInputAction(el);
+    }, INPUT_DEBOUNCE_MS);
 
-    WP.state.inputTimers.set(selector, { tid, el, selector });
+    WP.state.inputTimers.set(el, { tid, el });
   };
 
   WP.onChange = function(e) {
@@ -401,15 +416,14 @@
     // target them just like normal dropdowns.
     if (WP.isComboBoxInput(el)) {
       const selector = WP.buildSelector(el);
-      if (WP.state.inputTimers.has(selector)) {
-        clearTimeout(WP.state.inputTimers.get(selector).tid);
-        WP.state.inputTimers.delete(selector);
+      if (WP.state.inputTimers.has(el)) {
+        clearTimeout(WP.state.inputTimers.get(el).tid);
+        WP.state.inputTimers.delete(el);
       }
       const value = (el.value ?? el.textContent ?? '').trim();
       const label = WP.getLabel(el) || WP.labelFromSelector(selector);
-      WP.safeSend({
-        type: 'RECORD_ACTION',
-        action: { action: 'select', selector, value, label, description: label, elementHint: WP.elementHint(el) },
+      WP.recordAction(el, {
+        action: 'select', selector, value, label, description: label, elementHint: WP.elementHint(el),
       });
       return;
     }
@@ -418,9 +432,9 @@
     if (WP.isDateField(el)) {
       const selector = WP.buildSelector(el);
       // Cancel any pending debounced input for this element to avoid duplicates
-      if (WP.state.inputTimers.has(selector)) {
-        clearTimeout(WP.state.inputTimers.get(selector).tid);
-        WP.state.inputTimers.delete(selector);
+      if (WP.state.inputTimers.has(el)) {
+        clearTimeout(WP.state.inputTimers.get(el).tid);
+        WP.state.inputTimers.delete(el);
       }
       WP.sendDateAction(el, selector);
     }
@@ -554,11 +568,10 @@
         const extractType = Array.from(extractTypeRadios).find(r => r.checked)?.value || 'text';
         const selector    = WP.buildSelector(targetEl);
         const label       = WP.getLabel(targetEl) || WP.labelFromSelector(selector);
-        WP.safeSend({
-          type: 'RECORD_ACTION',
-          action: { action: 'extract', selector, variable: varName, extractType, label,
-            description: `Extract ${extractType} → {{${varName}}}`,
-            elementHint: WP.elementHint(targetEl) },
+        WP.recordAction(targetEl, {
+          action: 'extract', selector, variable: varName, extractType, label,
+          description: `Extract ${extractType} → {{${varName}}}`,
+          elementHint: WP.elementHint(targetEl),
         });
         WP.flashRecorded(targetEl);
         cleanup();
@@ -579,11 +592,10 @@
           const varName  = btn.getAttribute('data-var');
           const selector = WP.buildSelector(targetEl);
           const label    = WP.getLabel(targetEl) || WP.labelFromSelector(selector);
-          WP.safeSend({
-            type: 'RECORD_ACTION',
-            action: { action: 'type', selector, value: `[[extracted.${varName}]]`, label,
-              description: `Fill with [[extracted.${varName}]]`,
-              elementHint: WP.elementHint(targetEl) },
+          WP.recordAction(targetEl, {
+            action: 'type', selector, value: `[[extracted.${varName}]]`, label,
+            description: `Fill with [[extracted.${varName}]]`,
+            elementHint: WP.elementHint(targetEl),
           });
           WP.flashRecorded(targetEl);
           cleanup();

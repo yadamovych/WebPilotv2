@@ -1,0 +1,8 @@
+{
+  "startUrl": "https://www.copart.com/",
+  "timeoutMs": 180000,
+  "useMockServer": true,
+  "assertions": {
+    "selectorValue": { "selector": "#input-search", "value": "honda" }
+  }
+}
