@@ -1,0 +1,512 @@
+{
+  "/home/devops/projects/personal/WebPilotv2/.github/workflows/extension-workflow-config.json": {
+    "mtime": 1781938687.7596238,
+    "ast_hash": "a77f9fec322fb2439ce39d17619bbbc2",
+    "semantic_hash": "a77f9fec322fb2439ce39d17619bbbc2"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/.eslintrc.json": {
+    "mtime": 1781938687.7596238,
+    "ast_hash": "b1a3eb5a98d80a8e82afa66d84db7420",
+    "semantic_hash": "b1a3eb5a98d80a8e82afa66d84db7420"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/background.js": {
+    "mtime": 1781938687.7611346,
+    "ast_hash": "9b0aaff15f6f2e681f0a7ecc9dcbf6ca",
+    "semantic_hash": "9b0aaff15f6f2e681f0a7ecc9dcbf6ca"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/content/bootstrap.js": {
+    "mtime": 1781938687.7611346,
+    "ast_hash": "b85b7f51c909aa1d8f5b53c238fd8b79",
+    "semantic_hash": "b85b7f51c909aa1d8f5b53c238fd8b79"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/content/context.js": {
+    "mtime": 1781938687.7617395,
+    "ast_hash": "a50f5a3cc408ef868410f9dd8a90910e",
+    "semantic_hash": "a50f5a3cc408ef868410f9dd8a90910e"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/content/guard.js": {
+    "mtime": 1781938687.7617395,
+    "ast_hash": "3ae8560db01be568be6ed68dff072139",
+    "semantic_hash": "3ae8560db01be568be6ed68dff072139"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/content/messages.js": {
+    "mtime": 1781938687.7617395,
+    "ast_hash": "866cc5ad0b7817309d9ccc7a66132101",
+    "semantic_hash": "866cc5ad0b7817309d9ccc7a66132101"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/content/overlay.js": {
+    "mtime": 1781938687.7617395,
+    "ast_hash": "bd231453a709cc65195d0bc76cbb41b4",
+    "semantic_hash": "bd231453a709cc65195d0bc76cbb41b4"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/content/playback.js": {
+    "mtime": 1781938687.7617395,
+    "ast_hash": "c3c0284bc70ff144b170783bfd14f4de",
+    "semantic_hash": "c3c0284bc70ff144b170783bfd14f4de"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/content/recording-events.js": {
+    "mtime": 1781938687.7617395,
+    "ast_hash": "2650877c655e0070d9e33470eebf2574",
+    "semantic_hash": "2650877c655e0070d9e33470eebf2574"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/content/recording.js": {
+    "mtime": 1781938687.7617395,
+    "ast_hash": "a11d09a89516c6be4966860534bb83ff",
+    "semantic_hash": "a11d09a89516c6be4966860534bb83ff"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/content/selectors.js": {
+    "mtime": 1781938687.7617395,
+    "ast_hash": "245d4da3b0b6cf9fda57739e78750c1e",
+    "semantic_hash": "245d4da3b0b6cf9fda57739e78750c1e"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/content/variables.js": {
+    "mtime": 1781938687.7617395,
+    "ast_hash": "36d73f0b27eaaf4fc015b9439476bea9",
+    "semantic_hash": "36d73f0b27eaaf4fc015b9439476bea9"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/error-handler.js": {
+    "mtime": 1781938687.7617395,
+    "ast_hash": "6333ff7d09244504d885b907a5f50c32",
+    "semantic_hash": "6333ff7d09244504d885b907a5f50c32"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/icons/generate_icons.py": {
+    "mtime": 1781938687.7617395,
+    "ast_hash": "af7a0b347e53195b0ccc0511e929d7d1",
+    "semantic_hash": "af7a0b347e53195b0ccc0511e929d7d1"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/lib/script-lists.js": {
+    "mtime": 1781938687.7629416,
+    "ast_hash": "097cfee3c9b386667e67d505b6b68fe3",
+    "semantic_hash": "097cfee3c9b386667e67d505b6b68fe3"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/lib/selector-alternatives.js": {
+    "mtime": 1781938687.7632964,
+    "ast_hash": "d0b62b4324837b5736451abd1f584da5",
+    "semantic_hash": "d0b62b4324837b5736451abd1f584da5"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/lib/step-utils.js": {
+    "mtime": 1781938687.7632964,
+    "ast_hash": "f10cbb476c2abf32d39afc8219145df8",
+    "semantic_hash": "f10cbb476c2abf32d39afc8219145df8"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/manifest.json": {
+    "mtime": 1781938687.7632964,
+    "ast_hash": "e81b2dfbca9e93ee3a7787b26ab87669",
+    "semantic_hash": "e81b2dfbca9e93ee3a7787b26ab87669"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/package.json": {
+    "mtime": 1781938687.7632964,
+    "ast_hash": "67badb73cfe479b688e0c9e67f0141af",
+    "semantic_hash": "67badb73cfe479b688e0c9e67f0141af"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup/core.js": {
+    "mtime": 1781938687.7632964,
+    "ast_hash": "848015c403761c2e77af58a8571d02a6",
+    "semantic_hash": "848015c403761c2e77af58a8571d02a6"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup/events.js": {
+    "mtime": 1781938687.7642436,
+    "ast_hash": "636d6bab76601a6d2cc4ab185f0c8d04",
+    "semantic_hash": "636d6bab76601a6d2cc4ab185f0c8d04"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup/init-bootstrap.js": {
+    "mtime": 1781938687.7642436,
+    "ast_hash": "d693c30ec26488efff8b96560043066d",
+    "semantic_hash": "d693c30ec26488efff8b96560043066d"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup/init-exports.js": {
+    "mtime": 1781938687.7642436,
+    "ast_hash": "ecfae82722c3307e456c306c2255c19e",
+    "semantic_hash": "ecfae82722c3307e456c306c2255c19e"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup/messages.js": {
+    "mtime": 1781938687.7642436,
+    "ast_hash": "61d207de24abab5a5fe8213c8fbfcaba",
+    "semantic_hash": "61d207de24abab5a5fe8213c8fbfcaba"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup/playback.js": {
+    "mtime": 1781938687.7642436,
+    "ast_hash": "82832e0efde681fa21c7812d208c7468",
+    "semantic_hash": "82832e0efde681fa21c7812d208c7468"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup/recording.js": {
+    "mtime": 1781938687.7642436,
+    "ast_hash": "df6599e3c58842be10d8aa3a771fa5e7",
+    "semantic_hash": "df6599e3c58842be10d8aa3a771fa5e7"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup/settings.js": {
+    "mtime": 1781938687.7642436,
+    "ast_hash": "b7b0597224c0717b8b10b4e924855037",
+    "semantic_hash": "b7b0597224c0717b8b10b4e924855037"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup/steps.js": {
+    "mtime": 1781938687.7642436,
+    "ast_hash": "0fec1817eaeff3c349c362373ea9b5bb",
+    "semantic_hash": "0fec1817eaeff3c349c362373ea9b5bb"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup/tabs.js": {
+    "mtime": 1781938687.7642436,
+    "ast_hash": "f5e75baaf3aacabc5c518d5d948b1317",
+    "semantic_hash": "f5e75baaf3aacabc5c518d5d948b1317"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup/templates.js": {
+    "mtime": 1781938687.7642436,
+    "ast_hash": "808aaf36fa0c0fa26e573d04727d1a58",
+    "semantic_hash": "808aaf36fa0c0fa26e573d04727d1a58"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup/utils.js": {
+    "mtime": 1781938687.7642436,
+    "ast_hash": "72fe6ab614155eb4c72714d020af3548",
+    "semantic_hash": "72fe6ab614155eb4c72714d020af3548"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/scripts/run-headless-ci.sh": {
+    "mtime": 1781938687.7642436,
+    "ast_hash": "e4c7f6f38e80679150da437875d52ecc",
+    "semantic_hash": "e4c7f6f38e80679150da437875d52ecc"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/scripts/split-modules.js": {
+    "mtime": 1781938687.76525,
+    "ast_hash": "a2c1ff8d3032c364adcbc8ae50d11392",
+    "semantic_hash": "a2c1ff8d3032c364adcbc8ae50d11392"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/sidepanel.js": {
+    "mtime": 1781938687.76525,
+    "ast_hash": "41f1cb889c6c6e7a7538b964e666dcfa",
+    "semantic_hash": "41f1cb889c6c6e7a7538b964e666dcfa"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/chrome-mock.js": {
+    "mtime": 1781938687.766012,
+    "ast_hash": "0b5fe70d10ad906c1a112d8d91c496f6",
+    "semantic_hash": "0b5fe70d10ad906c1a112d8d91c496f6"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/e2e/auth.setup.js": {
+    "mtime": 1781938687.766012,
+    "ast_hash": "2c15fbe4261c45c799f0bab3578ce5a0",
+    "semantic_hash": "2c15fbe4261c45c799f0bab3578ce5a0"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/e2e/extension.fixture.js": {
+    "mtime": 1781938687.766305,
+    "ast_hash": "8463091733c0ecd84812202d87762f7d",
+    "semantic_hash": "8463091733c0ecd84812202d87762f7d"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/e2e/helpers.js": {
+    "mtime": 1781938687.766305,
+    "ast_hash": "edbcd1c7a39d9137ed288ec73162f390",
+    "semantic_hash": "edbcd1c7a39d9137ed288ec73162f390"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/e2e/playback.spec.js": {
+    "mtime": 1781938687.766305,
+    "ast_hash": "0bd2c169927f874e34e5a749174d30d6",
+    "semantic_hash": "0bd2c169927f874e34e5a749174d30d6"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/e2e/playwright.config.js": {
+    "mtime": 1781938687.766305,
+    "ast_hash": "72bf81527dec3060d9960522b50c0097",
+    "semantic_hash": "72bf81527dec3060d9960522b50c0097"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/e2e/run-workflow.js": {
+    "mtime": 1781938687.766305,
+    "ast_hash": "1f4d814975075795993738d70a01f868",
+    "semantic_hash": "1f4d814975075795993738d70a01f868"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/e2e/workflow-run.spec.js": {
+    "mtime": 1781938687.766305,
+    "ast_hash": "2d4ca164900e633abd83d88985a6be24",
+    "semantic_hash": "2d4ca164900e633abd83d88985a6be24"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/error-handler.test.js": {
+    "mtime": 1781938687.766305,
+    "ast_hash": "b8dfa0d7c8e1ff09bdaf6d1070f8f0b2",
+    "semantic_hash": "b8dfa0d7c8e1ff09bdaf6d1070f8f0b2"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/headless-runner/run-workflow.mjs": {
+    "mtime": 1781938687.767271,
+    "ast_hash": "4c7aee8cc18c6e9a8b544e5c8d2e11c9",
+    "semantic_hash": "4c7aee8cc18c6e9a8b544e5c8d2e11c9"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/helpers/test-server.js": {
+    "mtime": 1781938687.767271,
+    "ast_hash": "6ec6e1fff85a941c3168a885b18203ad",
+    "semantic_hash": "6ec6e1fff85a941c3168a885b18203ad"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/script-lists.test.js": {
+    "mtime": 1781938687.767271,
+    "ast_hash": "8a2d087f23125a678c2d52d17e203395",
+    "semantic_hash": "8a2d087f23125a678c2d52d17e203395"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/step-utils.test.js": {
+    "mtime": 1781938687.767271,
+    "ast_hash": "41604226998457ec332209664d336ce8",
+    "semantic_hash": "41604226998457ec332209664d336ce8"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/workflows/_defaults.mock.json": {
+    "mtime": 1781938687.767271,
+    "ast_hash": "7798e025b2ba74741e3b6777772a5b78",
+    "semantic_hash": "7798e025b2ba74741e3b6777772a5b78"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/workflows/copart-test.meta.json": {
+    "mtime": 1781938687.7681565,
+    "ast_hash": "67950dd37e9adbc5e1c4eed5b5452237",
+    "semantic_hash": "67950dd37e9adbc5e1c4eed5b5452237"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/workflows/copart-test.mock.json": {
+    "mtime": 1781938687.7681565,
+    "ast_hash": "a99954c0e9b15d77255190393b7c37c8",
+    "semantic_hash": "a99954c0e9b15d77255190393b7c37c8"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/workflows/copart-test.workflow.json": {
+    "mtime": 1781938687.7681565,
+    "ast_hash": "a27749a7744185e32b2fad9aacdedd69",
+    "semantic_hash": "a27749a7744185e32b2fad9aacdedd69"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/workflows/extract-fill.workflow.json": {
+    "mtime": 1781938687.7681565,
+    "ast_hash": "45b422d8cb2a19d66d26a45a62d222fe",
+    "semantic_hash": "45b422d8cb2a19d66d26a45a62d222fe"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/workflows/jira-test.json": {
+    "mtime": 1781938687.7681565,
+    "ast_hash": "ecaab21fc814971788b1b53cb01c7494",
+    "semantic_hash": "ecaab21fc814971788b1b53cb01c7494"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/workflows/login.workflow.json": {
+    "mtime": 1781938687.7681565,
+    "ast_hash": "a27b0cc32244e41d8f12730a7a34f1a2",
+    "semantic_hash": "a27b0cc32244e41d8f12730a7a34f1a2"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/workflows/variable-login.workflow.json": {
+    "mtime": 1781938687.7681565,
+    "ast_hash": "8396146c60f0ac3495db7fefeb8f2936",
+    "semantic_hash": "8396146c60f0ac3495db7fefeb8f2936"
+  },
+  "/home/devops/projects/personal/WebPilotv2/infra/.terraform.lock.hcl": {
+    "mtime": 1781938687.7681565,
+    "ast_hash": "84404cbb75484fffbdeb689cab39160e",
+    "semantic_hash": "84404cbb75484fffbdeb689cab39160e"
+  },
+  "/home/devops/projects/personal/WebPilotv2/infra/ecr.tf": {
+    "mtime": 1781938687.7687404,
+    "ast_hash": "69159a50c3ec6eeb4c8a6aaaa4cbafb5",
+    "semantic_hash": "69159a50c3ec6eeb4c8a6aaaa4cbafb5"
+  },
+  "/home/devops/projects/personal/WebPilotv2/infra/ecs.tf": {
+    "mtime": 1781938687.7687404,
+    "ast_hash": "1542f7527e07822d3723046c1fe14a12",
+    "semantic_hash": "1542f7527e07822d3723046c1fe14a12"
+  },
+  "/home/devops/projects/personal/WebPilotv2/infra/iam.tf": {
+    "mtime": 1781938687.7687404,
+    "ast_hash": "f4a3eef40a53527326c6f2085bec5d3e",
+    "semantic_hash": "f4a3eef40a53527326c6f2085bec5d3e"
+  },
+  "/home/devops/projects/personal/WebPilotv2/infra/locals.tf": {
+    "mtime": 1781938687.7687404,
+    "ast_hash": "74f1a02be2ca1fda5c0172e632b4e01f",
+    "semantic_hash": "74f1a02be2ca1fda5c0172e632b4e01f"
+  },
+  "/home/devops/projects/personal/WebPilotv2/infra/main.tf": {
+    "mtime": 1781938687.7687404,
+    "ast_hash": "3caa74a58dc0f142b436fd1c4a9fbffd",
+    "semantic_hash": "3caa74a58dc0f142b436fd1c4a9fbffd"
+  },
+  "/home/devops/projects/personal/WebPilotv2/infra/network.tf": {
+    "mtime": 1781938687.7687404,
+    "ast_hash": "dade8c6be8954c402dc8b9a97c401bca",
+    "semantic_hash": "dade8c6be8954c402dc8b9a97c401bca"
+  },
+  "/home/devops/projects/personal/WebPilotv2/infra/outputs.tf": {
+    "mtime": 1781938687.7687404,
+    "ast_hash": "446f652419b635f09a196f91b95225dd",
+    "semantic_hash": "446f652419b635f09a196f91b95225dd"
+  },
+  "/home/devops/projects/personal/WebPilotv2/infra/ssm.tf": {
+    "mtime": 1781938687.7687404,
+    "ast_hash": "e0db3794c427ea4c7ab2495b64dfb29c",
+    "semantic_hash": "e0db3794c427ea4c7ab2495b64dfb29c"
+  },
+  "/home/devops/projects/personal/WebPilotv2/infra/variables.tf": {
+    "mtime": 1781938687.7687404,
+    "ast_hash": "a8289d883722c56ce17189606a64af26",
+    "semantic_hash": "a8289d883722c56ce17189606a64af26"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/app.py": {
+    "mtime": 1781938687.7695117,
+    "ast_hash": "74aa0b119fb7cd5e57bd3ce0c28d616e",
+    "semantic_hash": "74aa0b119fb7cd5e57bd3ce0c28d616e"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/backends/__init__.py": {
+    "mtime": 1781938687.7695117,
+    "ast_hash": "e14e1e61ad2971e04e38898242cdbd26",
+    "semantic_hash": "e14e1e61ad2971e04e38898242cdbd26"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/backends/anthropic_backend.py": {
+    "mtime": 1781938687.769964,
+    "ast_hash": "0f993469471ab8602c4c840ec77ab3b0",
+    "semantic_hash": "0f993469471ab8602c4c840ec77ab3b0"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/backends/base.py": {
+    "mtime": 1781938687.769964,
+    "ast_hash": "52f3b789fd05cf5e3a1f1ce6f5cdd092",
+    "semantic_hash": "52f3b789fd05cf5e3a1f1ce6f5cdd092"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/backends/groq_backend.py": {
+    "mtime": 1781938687.769964,
+    "ast_hash": "06ffb40d4cc465c908ace08e677c3183",
+    "semantic_hash": "06ffb40d4cc465c908ace08e677c3183"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/backends/openai_backend.py": {
+    "mtime": 1781938687.769964,
+    "ast_hash": "fec8002991cc784dcc245647b602ee31",
+    "semantic_hash": "fec8002991cc784dcc245647b602ee31"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/backends/pricing.py": {
+    "mtime": 1781938687.769964,
+    "ast_hash": "563b728c127d26cea1fe28359004bffb",
+    "semantic_hash": "563b728c127d26cea1fe28359004bffb"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/backends/vllm_backend.py": {
+    "mtime": 1781938687.769964,
+    "ast_hash": "fdf755af0af916ba177c52aee82dba74",
+    "semantic_hash": "fdf755af0af916ba177c52aee82dba74"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/config.py": {
+    "mtime": 1781938687.769964,
+    "ast_hash": "49758b7d7322b630e522b7dcdf416f3c",
+    "semantic_hash": "49758b7d7322b630e522b7dcdf416f3c"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/tests/conftest.py": {
+    "mtime": 1781938687.769964,
+    "ast_hash": "8bf75ce0d91877cfd47425ecab5e520b",
+    "semantic_hash": "8bf75ce0d91877cfd47425ecab5e520b"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/tests/test_app.py": {
+    "mtime": 1781938687.7707307,
+    "ast_hash": "d40895e2b2e2054e566aac075fa8ff45",
+    "semantic_hash": "d40895e2b2e2054e566aac075fa8ff45"
+  },
+  "/home/devops/projects/personal/WebPilotv2/setup-error-handling.sh": {
+    "mtime": 1781938687.7707307,
+    "ast_hash": "e903614b446518a6f138a8852f526c9d",
+    "semantic_hash": "e903614b446518a6f138a8852f526c9d"
+  },
+  "/home/devops/projects/personal/WebPilotv2/.agent.md": {
+    "mtime": 1781938687.7580707,
+    "ast_hash": "8c6be7e665a876781857a233389d6114",
+    "semantic_hash": "8c6be7e665a876781857a233389d6114"
+  },
+  "/home/devops/projects/personal/WebPilotv2/.github/agents/github-issue-fixer.agent.md": {
+    "mtime": 1781938687.7592769,
+    "ast_hash": "fb2b4d167c7457353249c1162bf9266b",
+    "semantic_hash": "fb2b4d167c7457353249c1162bf9266b"
+  },
+  "/home/devops/projects/personal/WebPilotv2/.github/workflows/auto-fix-extension-errors.yml": {
+    "mtime": 1781938687.7592769,
+    "ast_hash": "403e2d23060d7ee1cd6208b1c0e7b9cb",
+    "semantic_hash": "403e2d23060d7ee1cd6208b1c0e7b9cb"
+  },
+  "/home/devops/projects/personal/WebPilotv2/.github/workflows/cd.yml": {
+    "mtime": 1781938687.7596238,
+    "ast_hash": "68e92f10456e8bf64f52f51f90114ea2",
+    "semantic_hash": "68e92f10456e8bf64f52f51f90114ea2"
+  },
+  "/home/devops/projects/personal/WebPilotv2/.github/workflows/ci.yml": {
+    "mtime": 1781938687.7596238,
+    "ast_hash": "f602bdc8968354398e3b842c28754bbd",
+    "semantic_hash": "f602bdc8968354398e3b842c28754bbd"
+  },
+  "/home/devops/projects/personal/WebPilotv2/.github/workflows/extension-error-checker.yml": {
+    "mtime": 1781938687.7596238,
+    "ast_hash": "c0322e0321d6defaaf66cbef89b612e3",
+    "semantic_hash": "c0322e0321d6defaaf66cbef89b612e3"
+  },
+  "/home/devops/projects/personal/WebPilotv2/AUTO_FIX_AUTOMATION.md": {
+    "mtime": 1781938687.7596238,
+    "ast_hash": "e527e69cda0eda59f66069bd884d6c02",
+    "semantic_hash": "e527e69cda0eda59f66069bd884d6c02"
+  },
+  "/home/devops/projects/personal/WebPilotv2/CLAUDE.md": {
+    "mtime": 1781938687.7596238,
+    "ast_hash": "e9e993d89a8c86874c82a4f471b687aa",
+    "semantic_hash": "e9e993d89a8c86874c82a4f471b687aa"
+  },
+  "/home/devops/projects/personal/WebPilotv2/EXTENSION-ERROR-HANDLING-SUMMARY.md": {
+    "mtime": 1781938687.7596238,
+    "ast_hash": "c7d4f277691a3329715a2a1911915c47",
+    "semantic_hash": "c7d4f277691a3329715a2a1911915c47"
+  },
+  "/home/devops/projects/personal/WebPilotv2/IMPROVEMENTS.md": {
+    "mtime": 1781938687.7596238,
+    "ast_hash": "0ae22757307ff96463da59907fb91a8a",
+    "semantic_hash": "0ae22757307ff96463da59907fb91a8a"
+  },
+  "/home/devops/projects/personal/WebPilotv2/README.md": {
+    "mtime": 1781938687.7596238,
+    "ast_hash": "79fa639a0c819bbcbbbdb89d8a042977",
+    "semantic_hash": "79fa639a0c819bbcbbbdb89d8a042977"
+  },
+  "/home/devops/projects/personal/WebPilotv2/docker-compose.vllm.yml": {
+    "mtime": 1781938687.7596238,
+    "ast_hash": "1c330b8f52b4dcb78323c56429824cc8",
+    "semantic_hash": "1c330b8f52b4dcb78323c56429824cc8"
+  },
+  "/home/devops/projects/personal/WebPilotv2/docker-compose.yml": {
+    "mtime": 1781938687.7596238,
+    "ast_hash": "0f475729002fc7946b28083a75ba3869",
+    "semantic_hash": "0f475729002fc7946b28083a75ba3869"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/ERROR-HANDLING-README.md": {
+    "mtime": 1781938687.7611346,
+    "ast_hash": "e296176a38f526f6f49cda778aadfc72",
+    "semantic_hash": "e296176a38f526f6f49cda778aadfc72"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/popup.html": {
+    "mtime": 1781938687.7632964,
+    "ast_hash": "635ab99517523bac7022a409b73aeafc",
+    "semantic_hash": "635ab99517523bac7022a409b73aeafc"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/sidepanel.html": {
+    "mtime": 1781938687.76525,
+    "ast_hash": "8412ba8ab7f75d41178058a5de1107bf",
+    "semantic_hash": "8412ba8ab7f75d41178058a5de1107bf"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/README.md": {
+    "mtime": 1781938687.76525,
+    "ast_hash": "5e8aaf9df59f0764fe200f9af228a4ed",
+    "semantic_hash": "5e8aaf9df59f0764fe200f9af228a4ed"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/fixtures/extract-fill.html": {
+    "mtime": 1781938687.766305,
+    "ast_hash": "5dd8468453ab1b781cea17c2e4c0f9dd",
+    "semantic_hash": "5dd8468453ab1b781cea17c2e4c0f9dd"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/tests/fixtures/simple-form.html": {
+    "mtime": 1781938687.767271,
+    "ast_hash": "2e5dae99974e57a6dd5dd26108fa8ab3",
+    "semantic_hash": "2e5dae99974e57a6dd5dd26108fa8ab3"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/requirements-dev.txt": {
+    "mtime": 1781938687.769964,
+    "ast_hash": "89c5dae9f6374c97f7ea16f5aa42a0f1",
+    "semantic_hash": "89c5dae9f6374c97f7ea16f5aa42a0f1"
+  },
+  "/home/devops/projects/personal/WebPilotv2/server/requirements.txt": {
+    "mtime": 1781938687.769964,
+    "ast_hash": "5bc62a03713d63320ddf4d901c888fb1",
+    "semantic_hash": "5bc62a03713d63320ddf4d901c888fb1"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/icons/icon128.png": {
+    "mtime": 1781938687.7629416,
+    "ast_hash": "6678c1753e7bbec155980b37cd4dd9a7",
+    "semantic_hash": "6678c1753e7bbec155980b37cd4dd9a7"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/icons/icon16.png": {
+    "mtime": 1781938687.7629416,
+    "ast_hash": "bf8e4ed338aacc668a2dbe1845a7b4fe",
+    "semantic_hash": "bf8e4ed338aacc668a2dbe1845a7b4fe"
+  },
+  "/home/devops/projects/personal/WebPilotv2/extension/icons/icon48.png": {
+    "mtime": 1781938687.7629416,
+    "ast_hash": "d3a3025f416458491b3739974e3ad5b4",
+    "semantic_hash": "d3a3025f416458491b3739974e3ad5b4"
+  }
+}

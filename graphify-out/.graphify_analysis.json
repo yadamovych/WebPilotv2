@@ -1,0 +1,800 @@
+{
+  "communities": {
+    "0": [
+      "abc",
+      "backends_anthropic_backend",
+      "backends_anthropic_backend_anthropicbackend",
+      "backends_anthropic_backend_anthropicbackend_complete",
+      "backends_anthropic_backend_anthropicbackend_init",
+      "backends_anthropic_backend_rationale_1",
+      "backends_base",
+      "backends_base_basebackend",
+      "backends_base_basebackend_complete",
+      "backends_base_completionresult",
+      "backends_base_rationale_1",
+      "backends_base_rationale_11",
+      "backends_base_rationale_23",
+      "backends_groq_backend",
+      "backends_groq_backend_groqbackend",
+      "backends_groq_backend_groqbackend_complete",
+      "backends_groq_backend_groqbackend_init",
+      "backends_groq_backend_rationale_1",
+      "backends_init",
+      "backends_init_get_backend",
+      "backends_init_rationale_1",
+      "backends_init_rationale_26",
+      "backends_openai_backend",
+      "backends_openai_backend_openaibackend",
+      "backends_openai_backend_openaibackend_complete",
+      "backends_openai_backend_openaibackend_init",
+      "backends_openai_backend_rationale_1",
+      "backends_pricing",
+      "backends_pricing_compute_cost",
+      "backends_pricing_rationale_1",
+      "backends_pricing_rationale_40",
+      "backends_vllm_backend",
+      "backends_vllm_backend_rationale_1",
+      "backends_vllm_backend_vllmbackend",
+      "backends_vllm_backend_vllmbackend_complete",
+      "backends_vllm_backend_vllmbackend_init",
+      "backends_vllm_backend_vllmbackend_resolve_model",
+      "basebackend",
+      "server_backends_anthropic_backend_py_completionresult",
+      "server_backends_groq_backend_py_completionresult",
+      "server_backends_init_py_basebackend",
+      "server_backends_openai_backend_py_completionresult",
+      "server_backends_vllm_backend_py_completionresult",
+      "tests_test_app",
+      "tests_test_app_mock_backend",
+      "tests_test_app_rationale_1",
+      "tests_test_app_rationale_133",
+      "tests_test_app_rationale_86",
+      "tests_test_app_test_fill_template_empty_variables",
+      "tests_test_app_test_fill_template_missing_vars_get_empty_string",
+      "tests_test_app_test_fill_template_success",
+      "tests_test_app_test_health",
+      "tests_test_app_test_prompt_endpoint",
+      "tests_test_app_testcomputecost",
+      "tests_test_app_testcomputecost_test_known_model",
+      "tests_test_app_testcomputecost_test_model_prefix_matching",
+      "tests_test_app_testcomputecost_test_output_tokens",
+      "tests_test_app_testcomputecost_test_unknown_model_returns_none"
+    ],
+    "1": [
+      "e2e_extension_fixture",
+      "e2e_extension_fixture_defaultauthprofile",
+      "e2e_extension_fixture_fs",
+      "e2e_extension_fixture_path",
+      "e2e_extension_fixture_pathtoextension",
+      "e2e_extension_fixture_resolveuserdatadir",
+      "e2e_extension_fixture_test",
+      "e2e_extension_fixture_test_base_chromium",
+      "e2e_helpers",
+      "e2e_helpers_applyassertions",
+      "e2e_helpers_clearsessionstorage",
+      "e2e_helpers_fs",
+      "e2e_helpers_getserverconfig",
+      "e2e_helpers_gettabidforpage",
+      "e2e_helpers_gettemplatevariablenames",
+      "e2e_helpers_loadworkflow",
+      "e2e_helpers_loadworkflowmeta",
+      "e2e_helpers_loadworkflowmock",
+      "e2e_helpers_path",
+      "e2e_helpers_playtemplate",
+      "e2e_helpers_resolveworkflowpath",
+      "e2e_helpers_seedtemplate",
+      "e2e_helpers_setserverconfig",
+      "e2e_helpers_workflowusestemplatevariables",
+      "e2e_playback_spec",
+      "e2e_playback_spec_loadworkflow_seedtemplate_setserverconfig_clearsessionstorage_gettabidforpage_playtemplate",
+      "e2e_playback_spec_test_expect",
+      "e2e_run_workflow",
+      "e2e_run_workflow_env",
+      "e2e_run_workflow_extensiondir",
+      "e2e_run_workflow_fs",
+      "e2e_run_workflow_meta",
+      "e2e_run_workflow_mockfile",
+      "e2e_run_workflow_mockvars",
+      "e2e_run_workflow_path",
+      "e2e_run_workflow_resolveworkflowpath_loadworkflowmeta_loadworkflowmock",
+      "e2e_run_workflow_result",
+      "e2e_run_workflow_spawnsync",
+      "e2e_run_workflow_workflowpath",
+      "e2e_workflow_run_spec",
+      "e2e_workflow_run_spec_loadworkflow_loadworkflowmeta_gettemplatevariablenames_seedtemplate_setserverconfig_getserverconfig_clearsessionstorage_gettabidforpage_playtemplate_applyassertions",
+      "e2e_workflow_run_spec_path",
+      "e2e_workflow_run_spec_test_expect"
+    ],
+    "2": [
+      "docker_compose_file",
+      "docker_compose_mistral_model",
+      "docker_compose_standard_stack",
+      "docker_compose_vllm_file",
+      "docker_compose_vllm_service",
+      "docker_compose_vllm_stack",
+      "docker_compose_webpilot_server_service",
+      "extension_error_handling_docs",
+      "extension_error_handling_readme_file",
+      "extension_execute_with_ai",
+      "extension_popup_file",
+      "extension_popup_ui",
+      "extension_sidepanel_file",
+      "extension_sidepanel_ui",
+      "extension_sp_quick_prompt",
+      "extension_tab_record",
+      "extension_tab_settings",
+      "extension_tab_templates",
+      "extension_tab_workflows",
+      "improvements_assertions",
+      "improvements_file",
+      "improvements_headless_cli",
+      "improvements_multi_locator",
+      "improvements_selenium_ide",
+      "improvements_webpilot",
+      "readme_anthropic_backend",
+      "readme_chrome_extension",
+      "readme_fastapi_server",
+      "readme_file",
+      "readme_fill_template_api",
+      "readme_groq_backend",
+      "readme_openai_backend",
+      "readme_template_variables",
+      "readme_terraform_infra",
+      "readme_vllm_backend",
+      "readme_webpilot",
+      "server_anthropic_sdk",
+      "server_groq_sdk",
+      "server_openai_sdk"
+    ],
+    "3": [
+      "basemodel",
+      "basesettings",
+      "request",
+      "server_app",
+      "server_app_analyze_selector_error",
+      "server_app_build_usage",
+      "server_app_check_rate_limit",
+      "server_app_extensionerrorrecord",
+      "server_app_extensionerrorreport",
+      "server_app_fill_template",
+      "server_app_filltemplaterequest",
+      "server_app_filltemplateresponse",
+      "server_app_health",
+      "server_app_list_playback_logs",
+      "server_app_log_usage",
+      "server_app_playbacklogrequest",
+      "server_app_prompt_endpoint",
+      "server_app_promptrequest",
+      "server_app_promptresponse",
+      "server_app_rationale_1",
+      "server_app_rationale_223",
+      "server_app_rationale_285",
+      "server_app_rationale_303",
+      "server_app_rationale_332",
+      "server_app_rationale_350",
+      "server_app_rationale_356",
+      "server_app_rationale_454",
+      "server_app_report_extension_errors",
+      "server_app_report_playback_log",
+      "server_app_selectoralternative",
+      "server_app_selectoranalysisrequest",
+      "server_app_selectoranalysisresponse",
+      "server_app_usageinfo",
+      "server_app_websocket_endpoint",
+      "server_config",
+      "server_config_rationale_1",
+      "server_config_settings",
+      "websocket"
+    ],
+    "4": [
+      "agent_agent_file",
+      "agent_background_js",
+      "agent_content_js",
+      "agent_error_handler_js",
+      "agent_eslint_auto_fix",
+      "agent_extension_errors_label",
+      "agent_extension_lint_fixer",
+      "agent_npm_lint_fix",
+      "agent_popup_js",
+      "auto_fix_automation_file",
+      "auto_fix_automation_system",
+      "extension_error_handling_summary_file",
+      "server_bandit_dep",
+      "server_safety_dep",
+      "summary_error_handling_system",
+      "summary_error_tracker",
+      "summary_safe_chrome",
+      "summary_safe_stor",
+      "summary_send_message_safe",
+      "workflows_auto_fix_extension_errors_file",
+      "workflows_auto_fix_workflow",
+      "workflows_auto_issue_creation",
+      "workflows_ci_file",
+      "workflows_ci_pipeline",
+      "workflows_docker_build_check",
+      "workflows_error_checker",
+      "workflows_eslint_check",
+      "workflows_extension_ci",
+      "workflows_extension_error_checker_file",
+      "workflows_extension_errors_trigger",
+      "workflows_push_main",
+      "workflows_security_checks",
+      "workflows_six_hour_schedule"
+    ],
+    "5": [
+      "extension_eslintrc",
+      "extension_eslintrc_env",
+      "extension_eslintrc_env_browser",
+      "extension_eslintrc_env_es2021",
+      "extension_eslintrc_env_webextensions",
+      "extension_eslintrc_extends",
+      "extension_eslintrc_globals",
+      "extension_eslintrc_globals_chrome",
+      "extension_eslintrc_globals_errortracker",
+      "extension_eslintrc_globals_reporterrorstobackend",
+      "extension_eslintrc_globals_safechrome",
+      "extension_eslintrc_globals_safestor",
+      "extension_eslintrc_globals_sendmessagesafe",
+      "extension_eslintrc_overrides",
+      "extension_eslintrc_parseroptions",
+      "extension_eslintrc_parseroptions_ecmaversion",
+      "extension_eslintrc_parseroptions_sourcetype",
+      "extension_eslintrc_rules",
+      "extension_eslintrc_rules_brace_style",
+      "extension_eslintrc_rules_comma_dangle",
+      "extension_eslintrc_rules_curly",
+      "extension_eslintrc_rules_eqeqeq",
+      "extension_eslintrc_rules_indent",
+      "extension_eslintrc_rules_no_catch_shadow",
+      "extension_eslintrc_rules_no_console",
+      "extension_eslintrc_rules_no_empty",
+      "extension_eslintrc_rules_no_trailing_spaces",
+      "extension_eslintrc_rules_no_unused_vars",
+      "extension_eslintrc_rules_no_var",
+      "extension_eslintrc_rules_prefer_const",
+      "extension_eslintrc_rules_quotes",
+      "extension_eslintrc_rules_semi"
+    ],
+    "6": [
+      "extension_background",
+      "extension_background_broadcasttoframes",
+      "extension_background_delay",
+      "extension_background_ensurecontentscript",
+      "extension_background_executesteps",
+      "extension_background_filltemplatevariables",
+      "extension_background_handledeletetemplate",
+      "extension_background_handleexporttemplate",
+      "extension_background_handlegettemplates",
+      "extension_background_handleimporttemplate",
+      "extension_background_handleplaytemplate",
+      "extension_background_handlepreviewvariables",
+      "extension_background_handlerecordaction",
+      "extension_background_handlesavetemplate",
+      "extension_background_handlestartrecording",
+      "extension_background_handlestoprecording",
+      "extension_background_persiststate",
+      "extension_background_recordstepresult",
+      "extension_background_reportplaybacktobackend",
+      "extension_background_state",
+      "extension_background_substitutevariables",
+      "extension_background_variablefillcache",
+      "extension_background_variablefillcachekey",
+      "extension_background_waitforpossiblenavigation",
+      "extension_background_waitfortabload"
+    ],
+    "7": [
+      "extension_package",
+      "extension_package_author",
+      "extension_package_description",
+      "extension_package_devdependencies",
+      "extension_package_devdependencies_eslint",
+      "extension_package_devdependencies_playwright_test",
+      "extension_package_keywords",
+      "extension_package_license",
+      "extension_package_main",
+      "extension_package_name",
+      "extension_package_scripts",
+      "extension_package_scripts_lint",
+      "extension_package_scripts_lint_fix",
+      "extension_package_scripts_postinstall",
+      "extension_package_scripts_test",
+      "extension_package_scripts_test_all",
+      "extension_package_scripts_test_e2e",
+      "extension_package_scripts_test_e2e_auth",
+      "extension_package_scripts_test_e2e_ci",
+      "extension_package_scripts_test_e2e_setup",
+      "extension_package_scripts_test_e2e_workflow",
+      "extension_package_scripts_test_headless",
+      "extension_package_scripts_test_headless_ci",
+      "extension_package_version"
+    ],
+    "8": [
+      "extension_manifest",
+      "extension_manifest_action",
+      "extension_manifest_action_default_icon",
+      "extension_manifest_background",
+      "extension_manifest_background_service_worker",
+      "extension_manifest_content_scripts",
+      "extension_manifest_default_icon_128",
+      "extension_manifest_default_icon_16",
+      "extension_manifest_default_icon_48",
+      "extension_manifest_description",
+      "extension_manifest_host_permissions",
+      "extension_manifest_icons",
+      "extension_manifest_icons_128",
+      "extension_manifest_icons_16",
+      "extension_manifest_icons_48",
+      "extension_manifest_manifest_version",
+      "extension_manifest_name",
+      "extension_manifest_permissions",
+      "extension_manifest_side_panel",
+      "extension_manifest_side_panel_default_path",
+      "extension_manifest_version",
+      "extension_manifest_web_accessible_resources"
+    ],
+    "9": [
+      "scripts_split_modules",
+      "scripts_split_modules_content_functions",
+      "scripts_split_modules_content_splits",
+      "scripts_split_modules_content_state_vars",
+      "scripts_split_modules_ext",
+      "scripts_split_modules_extractlines",
+      "scripts_split_modules_fs",
+      "scripts_split_modules_guardcontent",
+      "scripts_split_modules_path",
+      "scripts_split_modules_popup_functions",
+      "scripts_split_modules_popup_splits",
+      "scripts_split_modules_popupcore",
+      "scripts_split_modules_popupinitend",
+      "scripts_split_modules_popupinitstart",
+      "scripts_split_modules_readlines",
+      "scripts_split_modules_splitcontent",
+      "scripts_split_modules_splitpopup",
+      "scripts_split_modules_transformcontentbody",
+      "scripts_split_modules_transformpopupbody",
+      "scripts_split_modules_wrapcontentmodule",
+      "scripts_split_modules_wrappopupmodule"
+    ],
+    "10": [
+      "server_black_dep",
+      "server_fastapi_dep",
+      "server_flake8_dep",
+      "server_mypy_dep",
+      "server_pytest_dep",
+      "server_requirements_dev_file",
+      "server_requirements_file",
+      "server_uvicorn_dep",
+      "workflows_backend_ci",
+      "workflows_cd_file",
+      "workflows_cd_pipeline",
+      "workflows_ecr_push",
+      "workflows_ecs_deploy",
+      "workflows_flake8",
+      "workflows_manual_dispatch_only",
+      "workflows_oidc_auth",
+      "workflows_pytest"
+    ],
+    "11": [
+      "extension_error_handler",
+      "extension_error_handler_errortracker",
+      "extension_error_handler_errortracker_clearerrors",
+      "extension_error_handler_errortracker_constructor",
+      "extension_error_handler_errortracker_exporterrors",
+      "extension_error_handler_errortracker_geterrors",
+      "extension_error_handler_errortracker_persisterror",
+      "extension_error_handler_errortracker_track",
+      "extension_error_handler_reporterrorstobackend",
+      "extension_error_handler_safechrome",
+      "extension_error_handler_safestor",
+      "extension_error_handler_sendmessagesafe",
+      "extension_error_handler_starterrorreporting",
+      "extension_error_handler_stoperrorreporting"
+    ],
+    "12": [
+      "helpers_test_server",
+      "helpers_test_server_base_mock_variables",
+      "helpers_test_server_corsheaders",
+      "helpers_test_server_createtestserver",
+      "helpers_test_server_fixtures_dir",
+      "helpers_test_server_fs",
+      "helpers_test_server_handlefilltemplate",
+      "helpers_test_server_http",
+      "helpers_test_server_loadmockvariables",
+      "helpers_test_server_path",
+      "helpers_test_server_port",
+      "helpers_test_server_sendjson",
+      "helpers_test_server_servefixture",
+      "helpers_test_server_workflows_dir"
+    ],
+    "13": [
+      "icons_icon128_file",
+      "icons_icon128_minimalist_design",
+      "icons_icon128_solid_blue_brand",
+      "icons_icon128_square_shape",
+      "icons_icon128_webpilot_branding",
+      "icons_icon16_file",
+      "icons_icon16_minimalist_design",
+      "icons_icon16_solid_blue_brand",
+      "icons_icon16_toolbar_favicon",
+      "icons_icon48_extension_management_icon",
+      "icons_icon48_file",
+      "icons_icon48_minimalist_design",
+      "icons_icon48_solid_blue_brand"
+    ],
+    "14": [
+      "extension_e2e_tests",
+      "extension_headless_runner",
+      "extension_test_server",
+      "extension_test_suite",
+      "extension_tests_readme_file",
+      "extension_unit_tests",
+      "fixtures_extract_fill_file",
+      "fixtures_extract_fill_page",
+      "readme_extracted_variables",
+      "workflows_extension_e2e",
+      "workflows_playwright_e2e"
+    ],
+    "15": [
+      "headless_runner_run_workflow",
+      "headless_runner_run_workflow_dirname",
+      "headless_runner_run_workflow_getselectors",
+      "headless_runner_run_workflow_loadmockvars",
+      "headless_runner_run_workflow_main",
+      "headless_runner_run_workflow_resolveplaceholders",
+      "headless_runner_run_workflow_resolveworkflowpath",
+      "headless_runner_run_workflow_runstep",
+      "headless_runner_run_workflow_usage",
+      "headless_runner_run_workflow_waitforselector"
+    ],
+    "16": [
+      "e2e_auth_setup",
+      "e2e_auth_setup_chromium",
+      "e2e_auth_setup_fs",
+      "e2e_auth_setup_main",
+      "e2e_auth_setup_path",
+      "e2e_auth_setup_pathtoextension",
+      "e2e_auth_setup_profiledir",
+      "e2e_auth_setup_readline",
+      "e2e_auth_setup_waitforenter"
+    ],
+    "17": [
+      "server_app_extract_json",
+      "server_app_rationale_500",
+      "tests_test_app_testextractjson",
+      "tests_test_app_testextractjson_test_plain_json",
+      "tests_test_app_testextractjson_test_raises_on_garbage",
+      "tests_test_app_testextractjson_test_truncated_json_raises",
+      "tests_test_app_testextractjson_test_with_markdown_fence",
+      "tests_test_app_testextractjson_test_with_multiline_values",
+      "tests_test_app_testextractjson_test_with_prose_before"
+    ],
+    "18": [
+      "tests_chrome_mock",
+      "tests_chrome_mock_makechromemock",
+      "tests_error_handler_test",
+      "tests_error_handler_test_assert",
+      "tests_error_handler_test_loadhandler",
+      "tests_error_handler_test_makechromemock",
+      "tests_error_handler_test_module_path",
+      "tests_error_handler_test_path",
+      "tests_error_handler_test_test"
+    ],
+    "19": [
+      "tests_script_lists_test",
+      "tests_script_lists_test_assert",
+      "tests_script_lists_test_ext",
+      "tests_script_lists_test_fs",
+      "tests_script_lists_test_loadscriptlists",
+      "tests_script_lists_test_path",
+      "tests_script_lists_test_scriptsrcsfromhtml",
+      "tests_script_lists_test_test",
+      "tests_script_lists_test_vm"
+    ],
+    "20": [
+      "lib_step_utils",
+      "lib_step_utils_getstepselectors",
+      "lib_step_utils_ischeckboxhint",
+      "lib_step_utils_isnativeselectstep",
+      "lib_step_utils_normalizetemplatevariable",
+      "lib_step_utils_sanitizerecordedsteps",
+      "lib_step_utils_scoreselectorquality",
+      "lib_step_utils_shoulddroprecordedaction"
+    ],
+    "21": [
+      "tests_step_utils_test",
+      "tests_step_utils_test_assert",
+      "tests_step_utils_test_loadsteputils",
+      "tests_step_utils_test_module_path",
+      "tests_step_utils_test_path",
+      "tests_step_utils_test_test",
+      "tests_step_utils_test_vm"
+    ],
+    "22": [
+      "claude_file",
+      "claude_goal_driven_execution",
+      "claude_simplicity_first",
+      "claude_surgical_changes",
+      "claude_think_before_coding"
+    ],
+    "23": [
+      "icons_generate_icons",
+      "icons_generate_icons_create_solid_png",
+      "icons_generate_icons_main",
+      "icons_generate_icons_rationale_16"
+    ],
+    "24": [
+      "agents_fix_branch_pattern",
+      "agents_github_issue_fixer_agent",
+      "agents_github_issue_fixer_agent_file"
+    ],
+    "25": [
+      "e2e_playwright_config",
+      "e2e_playwright_config_config",
+      "e2e_playwright_config_path"
+    ],
+    "26": [
+      "extension_sidepanel",
+      "extension_sidepanel_refreshrunbtn"
+    ],
+    "27": [
+      "fixtures_login_form_page",
+      "fixtures_simple_form_file"
+    ],
+    "28": [
+      "home_devops_projects_personal_webpilotv2_extension_scripts_run_headless_ci_sh__entry",
+      "scripts_run_headless_ci"
+    ],
+    "29": [
+      "home_devops_projects_personal_webpilotv2_setup_error_handling_sh__entry",
+      "setup_error_handling"
+    ],
+    "30": [
+      "lib_selector_alternatives",
+      "lib_selector_alternatives_alternativesfromelement"
+    ],
+    "31": [
+      "popup_playback",
+      "popup_playback_templateneedsaiprompt"
+    ],
+    "32": [
+      "tests_conftest",
+      "tests_conftest_rationale_1"
+    ],
+    "33": [
+      "content_bootstrap"
+    ],
+    "34": [
+      "content_context"
+    ],
+    "35": [
+      "content_guard"
+    ],
+    "36": [
+      "content_messages"
+    ],
+    "37": [
+      "content_overlay"
+    ],
+    "38": [
+      "content_playback"
+    ],
+    "39": [
+      "content_recording"
+    ],
+    "40": [
+      "content_recording_events"
+    ],
+    "41": [
+      "content_selectors"
+    ],
+    "42": [
+      "content_variables"
+    ],
+    "43": [
+      "lib_script_lists"
+    ],
+    "44": [
+      "popup_core"
+    ],
+    "45": [
+      "popup_events"
+    ],
+    "46": [
+      "popup_init_bootstrap"
+    ],
+    "47": [
+      "popup_init_exports"
+    ],
+    "48": [
+      "popup_messages"
+    ],
+    "49": [
+      "popup_recording"
+    ],
+    "50": [
+      "popup_settings"
+    ],
+    "51": [
+      "popup_steps"
+    ],
+    "52": [
+      "popup_tabs"
+    ],
+    "53": [
+      "popup_templates"
+    ],
+    "54": [
+      "popup_utils"
+    ]
+  },
+  "cohesion": {
+    "0": 0.0750151240169389,
+    "1": 0.0753045404208195,
+    "2": 0.06612685560053981,
+    "3": 0.11095305832147938,
+    "4": 0.07386363636363637,
+    "5": 0.0625,
+    "6": 0.15666666666666668,
+    "7": 0.08333333333333333,
+    "8": 0.09090909090909091,
+    "9": 0.1523809523809524,
+    "10": 0.1323529411764706,
+    "11": 0.21978021978021978,
+    "12": 0.16483516483516483,
+    "13": 0.1794871794871795,
+    "14": 0.18181818181818182,
+    "15": 0.35555555555555557,
+    "16": 0.25,
+    "17": 0.3611111111111111,
+    "18": 0.2777777777777778,
+    "19": 0.2222222222222222,
+    "20": 0.4642857142857143,
+    "21": 0.2857142857142857,
+    "22": 0.4,
+    "23": 0.6666666666666666,
+    "24": 0.6666666666666666,
+    "25": 0.6666666666666666,
+    "26": 1.0,
+    "27": 1.0,
+    "28": 1.0,
+    "29": 1.0,
+    "30": 1.0,
+    "31": 1.0,
+    "32": 1.0,
+    "33": 1.0,
+    "34": 1.0,
+    "35": 1.0,
+    "36": 1.0,
+    "37": 1.0,
+    "38": 1.0,
+    "39": 1.0,
+    "40": 1.0,
+    "41": 1.0,
+    "42": 1.0,
+    "43": 1.0,
+    "44": 1.0,
+    "45": 1.0,
+    "46": 1.0,
+    "47": 1.0,
+    "48": 1.0,
+    "49": 1.0,
+    "50": 1.0,
+    "51": 1.0,
+    "52": 1.0,
+    "53": 1.0,
+    "54": 1.0
+  },
+  "gods": [
+    {
+      "id": "backends_base_completionresult",
+      "label": "CompletionResult",
+      "degree": 32
+    },
+    {
+      "id": "backends_base_basebackend",
+      "label": "BaseBackend",
+      "degree": 17
+    },
+    {
+      "id": "server_config_settings",
+      "label": "Settings",
+      "degree": 16
+    },
+    {
+      "id": "extension_eslintrc_rules",
+      "label": "rules",
+      "degree": 15
+    },
+    {
+      "id": "backends_pricing_compute_cost",
+      "label": "compute_cost()",
+      "degree": 14
+    },
+    {
+      "id": "extension_package_scripts",
+      "label": "scripts",
+      "degree": 13
+    },
+    {
+      "id": "server_app_fill_template",
+      "label": "fill_template()",
+      "degree": 11
+    },
+    {
+      "id": "backends_init_get_backend",
+      "label": "get_backend()",
+      "degree": 10
+    },
+    {
+      "id": "backends_vllm_backend_vllmbackend",
+      "label": "VLLMBackend",
+      "degree": 10
+    },
+    {
+      "id": "agent_extension_lint_fixer",
+      "label": "Extension Lint Fixer Agent",
+      "degree": 10
+    }
+  ],
+  "surprises": [
+    {
+      "source": "black formatter",
+      "target": "Backend Tests and Linting",
+      "source_files": [
+        "server/requirements-dev.txt",
+        ".github/workflows/ci.yml"
+      ],
+      "confidence": "INFERRED",
+      "relation": "used_by",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; peripheral node `black formatter` unexpectedly reaches hub `Backend Tests and Linting`"
+    },
+    {
+      "source": "mypy type checker",
+      "target": "Backend Tests and Linting",
+      "source_files": [
+        "server/requirements-dev.txt",
+        ".github/workflows/ci.yml"
+      ],
+      "confidence": "INFERRED",
+      "relation": "used_by",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; peripheral node `mypy type checker` unexpectedly reaches hub `Backend Tests and Linting`"
+    },
+    {
+      "source": "Extension Popup UI",
+      "target": "Chrome Extension",
+      "source_files": [
+        "extension/popup.html",
+        "README.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "part_of",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; peripheral node `Chrome Extension` unexpectedly reaches hub `Extension Popup UI`"
+    },
+    {
+      "source": "Extension Lint Fixer Agent",
+      "target": "Auto-fix Extension Errors Workflow",
+      "source_files": [
+        ".agent.md",
+        ".github/workflows/auto-fix-extension-errors.yml"
+      ],
+      "confidence": "INFERRED",
+      "relation": "implemented_by",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories"
+    },
+    {
+      "source": "Auto-fix Extension Errors Workflow",
+      "target": "npm run lint:fix",
+      "source_files": [
+        ".github/workflows/auto-fix-extension-errors.yml",
+        ".agent.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "runs",
+      "why": "connects across different repos/directories; peripheral node `npm run lint:fix` unexpectedly reaches hub `Auto-fix Extension Errors Workflow`"
+    }
+  ],
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
+}
