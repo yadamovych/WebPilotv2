@@ -55,28 +55,43 @@
     return step;
   }
 
-  function shouldDropRecordedAction(action, last) {
-    if (!action) {
+  function isEmptyTypeStep(step) {
+    return (
+      step.action === 'type' &&
+      (step.value === '' || step.value === null || step.value === undefined)
+    );
+  }
+
+  // Shared drop rules used both live (per recorded action) and during the final
+  // sanitize pass. Empty-type steps are intentionally NOT dropped here so that
+  // clearing a field during recording can still update/remove the prior step;
+  // they are pruned separately inside sanitizeRecordedSteps.
+  function isDroppableAction(step, prev) {
+    if (!step) {
       return false;
     }
-    if (action.action === 'type' && isNativeSelectStep(action)) {
+    if (step.action === 'type' && isNativeSelectStep(step)) {
       return true;
     }
-    if (action.action === 'type' && isCheckboxHint(action)) {
+    if (step.action === 'type' && isCheckboxHint(step)) {
       return true;
     }
-    if (action.action === 'click' && isNativeSelectStep(action)) {
+    if (step.action === 'click' && isNativeSelectStep(step)) {
       return true;
     }
     if (
-      action.action === 'click' &&
-      last &&
-      last.action === 'select' &&
-      last.selector === action.selector
+      step.action === 'click' &&
+      prev &&
+      prev.action === 'select' &&
+      prev.selector === step.selector
     ) {
       return true;
     }
     return false;
+  }
+
+  function shouldDropRecordedAction(action, last) {
+    return isDroppableAction(action, last);
   }
 
   function sanitizeRecordedSteps(steps) {
@@ -84,28 +99,14 @@
     for (const raw of steps) {
       const step = normalizeTemplateVariable(raw);
 
-      if (step.action === 'type' && (step.value === '' || step.value === null || step.value === undefined)) {
+      if (isEmptyTypeStep(step)) {
         continue;
       }
-      if (step.action === 'type' && isNativeSelectStep(step)) {
-        continue;
-      }
-      if (step.action === 'type' && isCheckboxHint(step)) {
-        continue;
-      }
-      if (step.action === 'click' && isNativeSelectStep(step)) {
+      if (isDroppableAction(step, out[out.length - 1])) {
         continue;
       }
 
       const last = out[out.length - 1];
-      if (
-        step.action === 'click' &&
-        last &&
-        last.action === 'select' &&
-        last.selector === step.selector
-      ) {
-        continue;
-      }
 
       if (
         step.action === 'select' &&
@@ -151,6 +152,8 @@
     getStepSelectors,
     isCheckboxHint,
     isNativeSelectStep,
+    isEmptyTypeStep,
+    isDroppableAction,
     shouldDropRecordedAction,
     normalizeTemplateVariable,
   };

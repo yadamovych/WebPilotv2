@@ -90,18 +90,15 @@
     const value = el.value ?? '';
     const label = WP.getLabel(el) || WP.labelFromSelector(selector);
     const suggestedVar = WP.labelToVarName(label);
-    WP.safeSend({
-      type: 'RECORD_ACTION',
-      action: {
-        action: 'type',
-        selector,
-        value,
-        label,
-        fieldType: 'date',
-        description: label,
-        suggestedVar,
-        elementHint: WP.elementHint(el),
-      },
+    WP.recordAction(el, {
+      action: 'type',
+      selector,
+      value,
+      label,
+      fieldType: 'date',
+      description: label,
+      suggestedVar,
+      elementHint: WP.elementHint(el),
     });
   };
 

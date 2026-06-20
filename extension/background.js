@@ -10,6 +10,10 @@ importScripts('error-handler.js', 'lib/step-utils.js', 'lib/script-lists.js');
 // eslint-disable-next-line no-undef
 const CONTENT_SCRIPT_FILES = WebPilotScripts.CONTENT_SCRIPT_FILES;
 
+// Window (ms) within which an identical consecutive recorded action is treated
+// as a duplicate and skipped.
+const DEDUP_WINDOW_MS = 1000;
+
 // ---------------------------------------------------------------------------
 // Open the side panel instead of a popup when the toolbar icon is clicked
 // ---------------------------------------------------------------------------
@@ -507,13 +511,12 @@ function handleRecordAction(action, tabId, sendResponse) {
         id: last.id,
         timestamp: now,
       };
-      persistState();
       // eslint-disable-next-line no-undef
       if (typeof WebPilotStepUtils !== 'undefined') {
         // eslint-disable-next-line no-undef
         STATE.steps = WebPilotStepUtils.sanitizeRecordedSteps(STATE.steps);
-        persistState();
       }
+      persistState();
       chrome.runtime.sendMessage({ type: 'STEPS_UPDATED', steps: STATE.steps }).catch((err) => {
         console.warn('[WebPilot] Failed to notify steps updated:', err?.message || err);
       });
@@ -521,13 +524,13 @@ function handleRecordAction(action, tabId, sendResponse) {
       return;
     }
 
-    // Generic deduplication: skip exact duplicate within 1 s
+    // Generic deduplication: skip exact duplicate within the dedup window
     if (
       last &&
       last.action   === action.action &&
       last.selector === action.selector &&
       last.value    === action.value &&
-      now - last.timestamp < 1000
+      now - last.timestamp < DEDUP_WINDOW_MS
     ) {
       sendResponse({ success: true, deduplicated: true });
       return;

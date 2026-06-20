@@ -138,6 +138,27 @@ test('sanitizeRecordedSteps collapses copart-style year dropdown recording', () 
   assert.strictEqual(out[4].selector, '#currentHigh');
 });
 
+test('isDroppableAction matches shouldDropRecordedAction (shared rules)', () => {
+  const utils = loadStepUtils();
+  const hint = 'SELECT[name=currentLow][#currentLow]';
+  const selectClick = { action: 'click', selector: '#currentLow', elementHint: hint };
+  assert.strictEqual(
+    utils.isDroppableAction(selectClick, null),
+    utils.shouldDropRecordedAction(selectClick, null),
+  );
+  const clickAfterSelect = { action: 'click', selector: '#x' };
+  const prev = { action: 'select', selector: '#x' };
+  assert.strictEqual(utils.isDroppableAction(clickAfterSelect, prev), true);
+});
+
+test('shouldDropRecordedAction does not drop empty type live (kept for field clearing)', () => {
+  const utils = loadStepUtils();
+  const emptyType = { action: 'type', selector: '#a', value: '' };
+  assert.strictEqual(utils.shouldDropRecordedAction(emptyType, null), false);
+  // ...but the final sanitize pass still prunes it
+  assert.strictEqual(utils.isEmptyTypeStep(emptyType), true);
+});
+
 test('getStepSelectors prefers selectors array', () => {
   const utils = loadStepUtils();
   const selectors = ['#a', '[data-testid="b"]'];

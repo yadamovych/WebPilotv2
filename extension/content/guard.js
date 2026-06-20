@@ -18,6 +18,11 @@
     isRecording: false,
     overlayRoot: null,
     hoveredEl: null,
+    // Set while we programmatically write a resolved extracted-variable preview
+    // back into a field, so the synthetic 'input' event it dispatches is ignored
+    // by the recorder (otherwise the template reference would be overwritten by
+    // the resolved literal).
+    previewApplying: false,
     inputTimers: new Map(),
     extractedValues: new Map(),
     extractedValuesInitialized: false,
